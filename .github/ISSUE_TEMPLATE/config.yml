@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability report
+    url: https://github.com/Mikalinsa/Mineradio-derivative-work/security/advisories/new
+    about: Please report security issues privately instead of opening a public issue.
+  - name: Upstream Mineradio
+    url: https://github.com/XxHuberrr/Mineradio
+    about: Check whether the issue also exists in the upstream project.
