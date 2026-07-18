@@ -1,0 +1,41 @@
+name: Bug report
+description: 报告可复现的软件问题（请先移除隐私数据）
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: "不要上传 Cookie、Token、账号二维码、版权媒体或包含个人路径的完整日志。"
+  - type: input
+    id: version
+    attributes:
+      label: Mineradio 版本
+      placeholder: "例如 1.1.5 Mikalinsa Edition"
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows 与硬件信息
+      placeholder: "Windows 11 24H2 / CPU / GPU"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期与实际结果
+    validations:
+      required: true
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: 隐私确认
+      options:
+        - label: 我已移除 Cookie、Token、二维码、账号标识和本地隐私路径
+          required: true

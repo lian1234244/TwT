@@ -1,0 +1,1 @@
+node:electron/js2c/sandbox_bundle:2 Uncaught (in promise) TypeError: Failed to construct 'URL': Invalid URL

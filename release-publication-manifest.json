@@ -1,0 +1,185 @@
+{
+  "generatedAt": "2026-07-17T11:42:52.623Z",
+  "repository": "Mikalinsa/Mineradio-derivative-work",
+  "upstream": "XxHuberrr/Mineradio",
+  "upstreamBaseline": "v1.1.1",
+  "upstreamBaselineReuploaded": false,
+  "releases": [
+    {
+      "tag": "v1.1.2",
+      "title": "Mineradio v1.1.2 - Mikalinsa Edition",
+      "notes": "release-notes/v1.1.2.md",
+      "prerelease": false,
+      "latest": false,
+      "assets": [
+        {
+          "name": "Mineradio-Mikalinsa-1.1.2-Setup.exe",
+          "bytes": 252556445,
+          "sha256": "a9b2a12b8ed59e21531d9121de68aec199afa9de5524dc232e308edef3baafa9"
+        },
+        {
+          "name": "Mineradio-Mikalinsa-1.1.2-Setup.exe.blockmap",
+          "bytes": 263997,
+          "sha256": "6fd251ef4c38619c13306e0dfdfb058563699be296b71fe63f821dca6ebcfc93"
+        },
+        {
+          "name": "Mineradio-Mikalinsa-1.1.2-更新说明.txt",
+          "bytes": 1324,
+          "sha256": "bbf382ae489aa331c971e08ad285172d26d586c70e1560605f8fd10ba14216f5"
+        },
+        {
+          "name": "Mineradio-Mikalinsa-1.1.2-release-manifest.json",
+          "bytes": 1860,
+          "sha256": "593ff4bd1545d57bdd2294a2a0e3e49739eade3310c43117ab8b5354e22df9a4"
+        },
+        {
+          "name": "Mineradio-Mikalinsa-1.1.2-SHA256SUMS.txt",
+          "bytes": 103,
+          "sha256": "de6c2fd4f09fd459f03527ab3f381b62ac56984fbc99640f595ada64496ed9f8"
+        },
+        {
+          "name": "Mineradio-Mikalinsa-1.1.2-Corresponding-Source.zip",
+          "bytes": 2264582,
+          "sha256": "d6cb5bf38f87fdd950a658cc8c5cd23692b2e629b41596151aa37d3102328021"
+        },
+        {
+          "name": "Mineradio-Mikalinsa-1.1.2-Corresponding-Source.zip.sha256.txt",
+          "bytes": 118,
+          "sha256": "a2d6e5fd2994bf90d6462e4bdb1a4cb87bd901875223a58a88c0c695ed27414e"
+        }
+      ]
+    },
+    {
+      "tag": "v1.1.3",
+      "title": "Mineradio v1.1.3 - Mikalinsa Edition",
+      "notes": "release-notes/v1.1.3.md",
+      "prerelease": false,
+      "latest": false,
+      "assets": [
+        {
+          "name": "Mineradio-Mikalinsa-1.1.3-Setup.exe",
+          "bytes": 252556695,
+          "sha256": "57fe377d3a47a3c7acb9d3cbf8904cc3203b191bc0f52d30fab10f357be745ea"
+        },
+        {
+          "name": "Mineradio-Mikalinsa-1.1.3-Setup.exe.blockmap",
+          "bytes": 264047,
+          "sha256": "56b89d3457c861fb65458d63b30bc12812a88558201c336b9fb1f43acb9bb36f"
+        },
+        {
+          "name": "Mineradio-Mikalinsa-1.1.3-更新说明.txt",
+          "bytes": 826,
+          "sha256": "d280667af9b0059f1969ba499665c7ec7e791164af4501ac2b83173d751a3d5b"
+        },
+        {
+          "name": "Mineradio-Mikalinsa-1.1.3-release-manifest.json",
+          "bytes": 1342,
+          "sha256": "f15e1f1a41ec5e8c2aec9dbfae88b62995ea09bf1b2c40250e8f7474913f2ca9"
+        },
+        {
+          "name": "Mineradio-Mikalinsa-1.1.3-SHA256SUMS.txt",
+          "bytes": 103,
+          "sha256": "5d268c02c6138752c7349b888c6feab0bbe888b92105080c5c930eb9605b9b58"
+        },
+        {
+          "name": "Mineradio-Mikalinsa-1.1.3-Corresponding-Source.zip",
+          "bytes": 2266550,
+          "sha256": "d3e3afc1a5d1eb602870cd548d80c956809cc32be5b74a61f511a0243203f53a"
+        },
+        {
+          "name": "Mineradio-Mikalinsa-1.1.3-Corresponding-Source.zip.sha256.txt",
+          "bytes": 118,
+          "sha256": "f2815dc62000b3b1911243bd9e2769f3449eb8a630629c25528181c046275a12"
+        }
+      ]
+    },
+    {
+      "tag": "v1.1.4",
+      "title": "Mineradio v1.1.4 - Mikalinsa Edition",
+      "notes": "release-notes/v1.1.4.md",
+      "prerelease": false,
+      "latest": false,
+      "assets": [
+        {
+          "name": "Mineradio-Mikalinsa-1.1.4-Setup.exe",
+          "bytes": 252574995,
+          "sha256": "e3829239fd0650c3a1d97cafde56b06896161c66aa14a573692b5a9f4efb5132"
+        },
+        {
+          "name": "Mineradio-Mikalinsa-1.1.4-Setup.exe.blockmap",
+          "bytes": 264150,
+          "sha256": "e2a897bb4199ddd97d16a3fd3e39a8f8bfb4be48f4ce025ffc89e3c574b33536"
+        },
+        {
+          "name": "Mineradio-Mikalinsa-1.1.4-更新说明.txt",
+          "bytes": 868,
+          "sha256": "29dee663efa602a8ac231a19ac709b97f74fd0af04f340d3aefa10cc386263e5"
+        },
+        {
+          "name": "Mineradio-Mikalinsa-1.1.4-release-manifest.json",
+          "bytes": 1384,
+          "sha256": "b5adfb8c3b3e6076a542de2d9d09e09fd84b1affaa4898a04b34c71013865866"
+        },
+        {
+          "name": "Mineradio-Mikalinsa-1.1.4-SHA256SUMS.txt",
+          "bytes": 103,
+          "sha256": "954deecddcaa03db908ce046c21b74c237144144d5b4c0a7417658a79ee7f3df"
+        },
+        {
+          "name": "Mineradio-Mikalinsa-1.1.4-Corresponding-Source.zip",
+          "bytes": 2289167,
+          "sha256": "c2e8b410d86ad9c1d6cabf3ff3d36ec7563a1d87077eb53627acbf5f6bac597f"
+        },
+        {
+          "name": "Mineradio-Mikalinsa-1.1.4-Corresponding-Source.zip.sha256.txt",
+          "bytes": 118,
+          "sha256": "33df023096941b6260d83821be754d0e217d9e3238b2ce7f6c9ab4a697b65b2f"
+        }
+      ]
+    },
+    {
+      "tag": "v1.1.5",
+      "title": "Mineradio v1.1.5 - Mikalinsa Edition",
+      "notes": "release-notes/v1.1.5.md",
+      "prerelease": false,
+      "latest": true,
+      "assets": [
+        {
+          "name": "Mineradio-Mikalinsa-1.1.5-Setup.exe",
+          "bytes": 252588954,
+          "sha256": "9aec03459c93980e442532b8aafee66d5ce1c8bb413c5022879e1c5fceec4b66"
+        },
+        {
+          "name": "Mineradio-Mikalinsa-1.1.5-Setup.exe.blockmap",
+          "bytes": 264197,
+          "sha256": "fb91d84ccc10b2003b8bbb569aca8451d5008a2bd9bf10436d3cf667539b5971"
+        },
+        {
+          "name": "Mineradio-Mikalinsa-1.1.5-更新说明.txt",
+          "bytes": 1407,
+          "sha256": "0b148144e39cbdbecc21d32d393a973b7cad6ccc5c1b56863ad6a6f8b5c76ca9"
+        },
+        {
+          "name": "Mineradio-Mikalinsa-1.1.5-release-manifest.json",
+          "bytes": 1927,
+          "sha256": "bd1dee4c0015ab9861661822eeff83947d86885fef03c671883e80db780feff5"
+        },
+        {
+          "name": "Mineradio-Mikalinsa-1.1.5-SHA256SUMS.txt",
+          "bytes": 103,
+          "sha256": "9a7f72e56ddbe1e169adfda469e54694f4c8bf6742896e467ffa5bd72bf74b1d"
+        },
+        {
+          "name": "Mineradio-Mikalinsa-1.1.5-Corresponding-Source.zip",
+          "bytes": 2306989,
+          "sha256": "9789c7dd6064f30f827cc4159667d973d60878bc41ebf772f027c95fe9c08297"
+        },
+        {
+          "name": "Mineradio-Mikalinsa-1.1.5-Corresponding-Source.zip.sha256.txt",
+          "bytes": 118,
+          "sha256": "35ad4b8f9782a527a89ccfc848f23d5d1d7c2dc44b244a9159e586331c784cd8"
+        }
+      ]
+    }
+  ]
+}

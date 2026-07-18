@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use this software, cite the Mikalinsa Edition and its upstream Mineradio project."
+title: "Mineradio - Mikalinsa Edition"
+type: software
+version: 1.1.5
+date-released: 2026-07-17
+authors:
+  - family-names: Mikalinsa
+    affiliation: "Independent open-source maintainer"
+repository-code: "https://github.com/Mikalinsa/Mineradio-derivative-work"
+url: "https://github.com/Mikalinsa/Mineradio-derivative-work"
+license: GPL-3.0-only
+references:
+  - type: software
+    title: "Mineradio"
+    authors:
+      - family-names: XxHuberrr
+    repository-code: "https://github.com/XxHuberrr/Mineradio"
+    version: 1.1.1

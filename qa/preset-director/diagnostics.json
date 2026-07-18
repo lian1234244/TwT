@@ -1,0 +1,42 @@
+[
+  {
+    "preset": 7,
+    "classes": "simple-mode empty-home-active home-entry-prepared home-entry-settling home-wallpaper-preview lyric-field-mode",
+    "stage": {
+      "width": 1536,
+      "height": 960,
+      "opacity": "0"
+    },
+    "activeText": "夜色沿着唱针缓慢展开"
+  },
+  {
+    "preset": 8,
+    "classes": "empty-home-active home-entry-prepared home-entry-settling home-wallpaper-preview lyric-field-mode cursor-hidden simple-mode magnetic-lyric-field-mode",
+    "stage": {
+      "width": 1536,
+      "height": 960,
+      "opacity": "1"
+    },
+    "activeText": "夜色沿着唱针缓慢展开"
+  },
+  {
+    "preset": 9,
+    "classes": "empty-home-active home-entry-prepared home-entry-settling home-wallpaper-preview cursor-hidden simple-mode magazine-lyric-mode",
+    "stage": {
+      "width": 1536,
+      "height": 960,
+      "opacity": "0"
+    },
+    "activeText": "夜色沿着唱针缓慢展开"
+  },
+  {
+    "preset": 10,
+    "classes": "empty-home-active home-entry-prepared home-entry-settling home-wallpaper-preview cursor-hidden simple-mode star-track-lyric-mode",
+    "stage": {
+      "width": 1536,
+      "height": 960,
+      "opacity": "0"
+    },
+    "activeText": "夜色沿着唱针缓慢展开"
+  }
+]
