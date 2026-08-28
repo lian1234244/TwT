@@ -31,6 +31,10 @@
   !endif
 !endif
 
+; StdUtils 插件目录：显式声明，避免依赖 electron-builder 内部任务顺序
+; （否则 !include 本文件可能先于 addplugindir 生效，导致 StdUtils:: 调用编译失败）
+!addplugindir /x86-unicode "${BUILD_RESOURCES_DIR}\x86-unicode"
+
 !include LogicLib.nsh
 !include FileFunc.nsh
 !include StdUtils.nsh

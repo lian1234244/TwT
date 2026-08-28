@@ -209,6 +209,7 @@ async function buildInstaller(pkg) {
     electronBuilderCli,
     '--win',
     'nsis',
+    '--publish', 'never',
     `--config.electronDist=${localElectronDist}`,
   ];
   console.log('[installer] build NSIS assisted installer');
@@ -285,9 +286,28 @@ async function writeReleaseMetadata(pkg) {
 async function main() {
   const pkg = await validate();
   await stopMineradioProcesses();
+  setupNsisPluginOverrides();
   await buildInstaller(pkg);
   assertPortablePackagePrivacy();
   await writeReleaseMetadata(pkg);
+}
+
+function setupNsisPluginOverrides() {
+  // electron-builder 26.x 用传统 NSIS 工具链时，插件目录注册与自定义 installer.nsh
+  // 的包含顺序存在竞态：StdUtils 等插件的 addplugindir 可能晚于 !include installer.nsh，
+  // 导致 "Plugin not found"；抢先注册又会与 electron-builder 自己的注册冲突。
+  // 解法：插件统一由 build/x86-unicode/（随仓库分发，installer.nsh 顶部显式声明）提供，
+  // 并用环境变量让 electron-builder 的插件目录解析指向空占位目录，跳过下载与重复注册。
+  const stub = path.join(root, 'build', 'nsis-resources-stub');
+  const stubPlugins = path.join(stub, 'plugins');
+  if (!fs.existsSync(path.join(root, 'build', 'x86-unicode', 'StdUtils.dll'))) {
+    throw new Error('Missing build/x86-unicode/StdUtils.dll — NSIS plugins must be present in the repository.');
+  }
+  if (!fs.existsSync(stubPlugins)) {
+    fs.mkdirSync(stubPlugins, { recursive: true });
+  }
+  process.env.ELECTRON_BUILDER_NSIS_RESOURCES_DIR = stub;
+  console.log('[installer] nsis plugins: use build/x86-unicode (explicit), resources dir -> stub');
 }
 
 main().catch(error => {
