@@ -3475,6 +3475,14 @@ html.control-glass-svg-ok #visual-guide-btn:hover{
   </div>
 </div>
 
+<!-- 一起听邀请码直连模态（零服务器模式） -->
+<div id="lt-code-modal" class="modal-mask">
+  <div class="modal" style="max-width:460px">
+    <h2 id="lt-code-title">邀请码一起听</h2>
+    <div id="lt-code-body" style="margin:16px 0 4px"></div>
+  </div>
+</div>
+
 <!-- 设置模态 -->
 <div id="settings-modal" class="modal-mask">
   <div class="modal" style="max-width:440px;max-height:80vh;overflow-y:auto">
@@ -32766,9 +32774,9 @@ function _connectSignaling() {
     var idx = 0;
     var tryNext = function() {
       if (idx >= urls.length) {
-        _friendsConnectError = '获取地址失败，5秒后重试...';
+        _friendsConnectError = '获取地址失败，稍后重试（邀请码一起听不受影响）';
         _updateFriendsSub();
-        setTimeout(_connectSignaling, 5000);
+        setTimeout(_connectSignaling, 60000);
         return;
       }
       var u = urls[idx++] + '?t=' + Date.now();
@@ -32956,7 +32964,12 @@ function _handleFriendRemove(msg) {
   renderFriendsList();
 }
 function _broadcastStatus() {
-  if (!_friendsWsReady) return;
+  // 信令在线或存在 P2P 直连（邀请码模式）时广播
+  var hasDc = false;
+  for (var k in _friendsDcMap) {
+    if (_friendsDcMap[k] && _friendsDcMap[k].readyState === 'open') { hasDc = true; break; }
+  }
+  if (!_friendsWsReady && !hasDc) return;
   var song = _getMySongInfo();
   var status = song ? 'listening' : 'online';
   var avatarChanged = _friendsData.myAvatar !== _lastSentAvatar;
@@ -32968,6 +32981,15 @@ function _broadcastStatus() {
     var st = { type: 'status_update', to: fc, fromCode: _friendsData.friendCode, status: status, song: safeSong, name: _friendsData.myName };
     if (avatarChanged) st.avatar = _friendsData.myAvatar;
     _twtSend(st);
+    // P2P 直连的好友走 DataChannel 同步状态（邀请码模式下无信令服务器）
+    var dc = _friendsDcMap[fc];
+    if (dc && dc.readyState === 'open') {
+      try {
+        var p2pSt = { type: 'status', status: status, song: safeSong, name: _friendsData.myName };
+        if (avatarChanged) p2pSt.avatar = _friendsData.myAvatar;
+        dc.send(JSON.stringify(p2pSt));
+      } catch (e) {}
+    }
   }
   _lastSentAvatar = _friendsData.myAvatar;
 }
@@ -32996,9 +33018,279 @@ function _initP2P(friendCode) {
     }).catch(function(e) { console.warn('[P2P] offer error:', e); });
   } catch (e) { console.warn('[P2P] init error:', e); }
 }
+// ==== 一起听邀请码直连（零服务器模式，两人通过微信/QQ传码建立P2P）====
+var _ltCodeStun = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun.miwifi.com:3478' },
+  { urls: 'stun:global.stun.twilio.com:3478' }
+];
+var _ltCodePeer = null; // { pc, dc, role, roomCode, info, startTimer }
+
+function _ltCodePack(obj) {
+  return 'TWT1.' + btoa(unescape(encodeURIComponent(JSON.stringify(obj))));
+}
+function _ltCodeParse(text) {
+  try {
+    text = (text || '').trim();
+    if (text.indexOf('TWT1.') !== 0) return null;
+    return JSON.parse(decodeURIComponent(escape(atob(text.substring(5)))));
+  } catch (e) { return null; }
+}
+// 等 ICE 候选收集完成再打包（非 trickle，码里即完整连接信息）
+function _ltWaitIce(pc) {
+  return new Promise(function(resolve) {
+    var done = false;
+    var finish = function() { if (!done) { done = true; resolve(pc.localDescription); } };
+    if (pc.iceGatheringState === 'complete') return finish();
+    pc.addEventListener('icegatheringstatechange', function() {
+      if (pc.iceGatheringState === 'complete') finish();
+    });
+    setTimeout(finish, 2500);
+  });
+}
+function _ltCodeModal(show) {
+  var m = document.getElementById('lt-code-modal');
+  if (m) { if (show) m.classList.add('show'); else m.classList.remove('show'); }
+}
+function _ltCodeCopy(btn) {
+  var ta = document.getElementById('lt-code-area');
+  var text = ta ? ta.value : '';
+  if (navigator.clipboard && navigator.clipboard.writeText && text) {
+    navigator.clipboard.writeText(text).then(function() { showToast('已复制，发给好友吧'); }).catch(function() { if (ta) { ta.select(); showToast('已全选，按 Ctrl+C 复制'); } });
+  } else if (ta) {
+    ta.select();
+    showToast('已全选，按 Ctrl+C 复制');
+  }
+}
+// 邀请码连接后自动把对方加进好友列表（码里带身份信息，无需加好友流程）
+function _addLtCodeFriend(info) {
+  if (!info || !info.fromCode) return;
+  for (var i = 0; i < _friendsData.friends.length; i++) {
+    if (_friendsData.friends[i].friendCode === info.fromCode) {
+      if (info.name && _friendsData.friends[i].name !== info.name) _friendsData.friends[i].name = info.name;
+      _friendsData.friends[i].status = 'online';
+      _friendsData.friends[i].lastSeen = Date.now();
+      _saveFriendsData(); renderFriendsList();
+      return;
+    }
+  }
+  _friendsData.friends.push({ friendCode: info.fromCode, name: info.name || '好友', avatar: info.avatar || '', status: 'online', currentSong: null, lastSeen: Date.now() });
+  _saveFriendsData(); renderFriendsList();
+}
+
+// —— 发起方：生成邀请码 ——
+function _ltCodeHost() {
+  if (_ltRoom) { showToast('请先离开当前一起听'); return; }
+  if (_ltCodePeer) { showToast('正在连接中，请完成或稍后重试'); return; }
+  var roomCode = 'LT' + Math.random().toString(36).slice(2, 8).toUpperCase();
+  var pc;
+  try { pc = new RTCPeerConnection({ iceServers: _ltCodeStun }); } catch (e) { showToast('浏览器不支持 P2P 连接'); return; }
+  var dc = pc.createDataChannel('twt-sync', { ordered: true });
+  dc.onopen = function() {};
+  dc.onclose = function() {};
+  dc.onmessage = function(e) {};
+  _ltCodePeer = { pc: pc, dc: dc, role: 'host', roomCode: roomCode, info: null };
+  var song = _getMySongInfo();
+  pc.createOffer().then(function(offer) {
+    return pc.setLocalDescription(offer);
+  }).then(function() {
+    return _ltWaitIce(pc);
+  }).then(function(localDesc) {
+    var payload = { v: 1, role: 'offer', sdp: { type: localDesc.type, sdp: localDesc.sdp }, fromCode: _friendsData.friendCode, name: _friendsData.myName, roomCode: roomCode };
+    if (song) payload.song = { name: song.name, artist: song.artist };
+    var code = _ltCodePack(payload);
+    var body = document.getElementById('lt-code-body');
+    var title = document.getElementById('lt-code-title');
+    if (title) title.textContent = '生成邀请码成功';
+    if (body) {
+      body.innerHTML = '<p style="font-size:13px;color:rgba(255,255,255,.6);line-height:1.6;margin:0 0 10px">把下面的邀请码通过微信/QQ发给好友，好友回复一段码后粘贴到输入框：</p>' +
+        '<textarea id="lt-code-area" readonly style="width:100%;height:88px;box-sizing:border-box;background:rgba(255,255,255,.04);border:1px solid rgba(244,210,138,.2);border-radius:8px;color:rgba(255,255,255,.8);font-size:11px;padding:8px;font-family:monospace;resize:none">' + escHtml(code) + '</textarea>' +
+        '<div class="btn-row" style="margin-top:10px"><button class="modal-btn primary" onclick="_ltCodeCopy(this)">复制邀请码</button></div>' +
+        '<p style="font-size:13px;color:rgba(255,255,255,.6);line-height:1.6;margin:14px 0 10px">粘贴好友回复的码：</p>' +
+        '<textarea id="lt-code-input" placeholder="粘贴好友回复的 TWT1. 开头的码" style="width:100%;height:64px;box-sizing:border-box;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.12);border-radius:8px;color:rgba(255,255,255,.85);font-size:11px;padding:8px;font-family:monospace;resize:none"></textarea>' +
+        '<div class="btn-row" style="margin-top:10px"><button class="modal-btn" onclick="_ltCodeAbort()">取消</button><button class="modal-btn primary" onclick="_ltCodeHostPasteAnswer()">连接好友</button></div>';
+    }
+  }).catch(function(e) {
+    console.warn('[LTCode] offer error:', e);
+    showToast('生成邀请码失败');
+    _ltCodeAbort();
+  });
+  var body0 = document.getElementById('lt-code-body');
+  var title0 = document.getElementById('lt-code-title');
+  if (title0) title0.textContent = '正在生成邀请码...';
+  if (body0) body0.innerHTML = '<p style="font-size:13px;color:rgba(255,255,255,.6);line-height:1.6;margin:0">正在建立连接通道，请稍候（最多几秒）</p>';
+  _ltCodeModal(true);
+}
+// —— 发起方：粘贴好友回复的 answer 码 ——
+function _ltCodeHostPasteAnswer() {
+  if (!_ltCodePeer || _ltCodePeer.role !== 'host') { showToast('请先生成邀请码'); return; }
+  var input = document.getElementById('lt-code-input');
+  var info = _ltCodeParse(input ? input.value : '');
+  if (!info || info.role !== 'answer') { showToast('回复码无效，请让好友重新复制'); return; }
+  _ltCodePeer.info = info;
+  var pc = _ltCodePeer.pc;
+  var dc = _ltCodePeer.dc;
+  _friendsPcMap[info.fromCode] = pc;
+  _friendsDcMap[info.fromCode] = dc;
+  _addLtCodeFriend(info);
+  _setupDataChannel(dc, info.fromCode);
+  // dc.onopen 由 _setupDataChannel 的 _ltCodeDcOpen 钩子接管后续
+  pc.setRemoteDescription(new RTCSessionDescription(info.sdp)).then(function() {
+    var body = document.getElementById('lt-code-body');
+    if (body) body.innerHTML = '<p style="font-size:13px;color:rgba(255,255,255,.6);line-height:1.6;margin:0">正在与 ' + escHtml(info.name || '好友') + ' 建立直连，成功后自动开始一起听...</p>';
+  }).catch(function(e) {
+    console.warn('[LTCode] setAnswer error:', e);
+    showToast('连接失败，请重新生成邀请码');
+    _ltCodeAbort();
+  });
+}
+// —— 接受方：粘贴邀请码，生成回复码 ——
+function _ltCodeGuest(text) {
+  if (_ltRoom) { showToast('请先离开当前一起听'); return; }
+  if (_ltCodePeer) { showToast('正在连接中，请完成或稍后重试'); return; }
+  var offer = _ltCodeParse(text);
+  if (!offer || offer.role !== 'offer') { showToast('邀请码无效，请让对方重新复制'); return; }
+  var pc;
+  try { pc = new RTCPeerConnection({ iceServers: _ltCodeStun }); } catch (e) { showToast('浏览器不支持 P2P 连接'); return; }
+  var hostCode = offer.fromCode;
+  _friendsPcMap[hostCode] = pc;
+  _addLtCodeFriend(offer);
+  var pending = { pc: pc, dc: null, role: 'guest', roomCode: offer.roomCode, info: offer, startTimer: null };
+  _ltCodePeer = pending;
+  pc.ondatachannel = function(e) {
+    pending.dc = e.channel;
+    _friendsDcMap[hostCode] = e.channel;
+    _setupDataChannel(e.channel, hostCode);
+  };
+  var title = document.getElementById('lt-code-title');
+  var body = document.getElementById('lt-code-body');
+  if (title) title.textContent = '正在生成回复码...';
+  if (body) body.innerHTML = '<p style="font-size:13px;color:rgba(255,255,255,.6);line-height:1.6;margin:0">正在处理邀请码，请稍候</p>';
+  _ltCodeModal(true);
+  pc.setRemoteDescription(new RTCSessionDescription(offer.sdp)).then(function() {
+    return pc.createAnswer();
+  }).then(function(answer) {
+    return pc.setLocalDescription(answer);
+  }).then(function() {
+    return _ltWaitIce(pc);
+  }).then(function(localDesc) {
+    var payload = { v: 1, role: 'answer', sdp: { type: localDesc.type, sdp: localDesc.sdp }, fromCode: _friendsData.friendCode, name: _friendsData.myName };
+    var code = _ltCodePack(payload);
+    if (title) title.textContent = '生成回复码成功';
+    if (body) {
+      body.innerHTML = '<p style="font-size:13px;color:rgba(255,255,255,.6);line-height:1.6;margin:0 0 10px">' + escHtml(offer.name || '好友') + ' 邀请你一起听' + (offer.song ? '：' + escHtml(offer.song.name || '') : '') + '。把下面的回复码发给对方，对方连接后自动开始：</p>' +
+        '<textarea id="lt-code-area" readonly style="width:100%;height:88px;box-sizing:border-box;background:rgba(255,255,255,.04);border:1px solid rgba(244,210,138,.2);border-radius:8px;color:rgba(255,255,255,.8);font-size:11px;padding:8px;font-family:monospace;resize:none">' + escHtml(code) + '</textarea>' +
+        '<div class="btn-row" style="margin-top:10px"><button class="modal-btn primary" onclick="_ltCodeCopy(this)">复制回复码</button><button class="modal-btn" onclick="_ltCodeAbort()">取消</button></div>' +
+        '<p style="font-size:12px;color:rgba(255,255,255,.4);line-height:1.6;margin:14px 0 0">等待对方完成连接...（此窗口可关闭，连接成功会自动提示）</p>';
+    }
+  }).catch(function(e) {
+    console.warn('[LTCode] answer error:', e);
+    showToast('处理邀请码失败');
+    _ltCodeAbort();
+  });
+}
+function _ltCodeAbort() {
+  if (_ltCodePeer) {
+    try { if (_ltCodePeer.pc) _ltCodePeer.pc.close(); } catch (e) {}
+    if (_ltCodePeer.startTimer) clearTimeout(_ltCodePeer.startTimer);
+    if (_ltCodePeer.info && _friendsPcMap[_ltCodePeer.info.fromCode]) delete _friendsPcMap[_ltCodePeer.info.fromCode];
+    _ltCodePeer = null;
+  }
+  _ltCodeModal(false);
+}
+// DataChannel 打开后的钩子：发起方直接开房，接受方等待开房消息
+function _ltCodeDcOpen(dc) {
+  if (!_ltCodePeer) return;
+  var peer = _ltCodePeer;
+  if (peer.dc !== dc) return;
+  _ltCodeModal(false);
+  if (peer.role === 'host') {
+    var code = peer.info.fromCode;
+    _ltRoom = { code: peer.roomCode, host: _friendsData.friendCode, peers: [code], song: _getMySongInfo() };
+    _ltIsHost = true;
+    var song = _getMySongInfo();
+    var state = { type: 'lt_state', song: song, currentTime: audio ? audio.currentTime : 0, playing: playing, timestamp: Date.now() };
+    _broadcastLtMessage({ type: 'lt_start', roomCode: peer.roomCode, song: song, state: state });
+    _startLtSync();
+    _showLtBar();
+    _ltCodePeer = null;
+    showToast('连接成功，开始一起听');
+  } else {
+    // 接受方：等待发起方 lt_start（通常瞬间到达），10秒兜底提示
+    var hostCode = peer.info.fromCode;
+    if (peer.startTimer) clearTimeout(peer.startTimer);
+    peer.startTimer = setTimeout(function() {
+      if (_ltCodePeer === peer && !_ltRoom) {
+        showToast('未收到房主的开房消息，请重试');
+        _ltCodeAbort();
+      }
+    }, 10000);
+  }
+}
+// 接受方收到开房消息
+function _ltCodeHandleStart(msg, fromCode) {
+  if (_ltCodePeer && _ltCodePeer.startTimer) { clearTimeout(_ltCodePeer.startTimer); _ltCodePeer.startTimer = null; }
+  _ltCodePeer = null;
+  _ltCodeModal(false);
+  _ltRoom = { code: msg.roomCode, host: fromCode, peers: [fromCode], song: msg.song };
+  _ltIsHost = false;
+  _ltClockOffset = 0;
+  _showLtBar();
+  if (msg.song) _findAndPlaySong(msg.song);
+  if (msg.state) _handleLtSync(msg.state);
+  _startLtPing();
+  showToast('已加入一起听');
+}
+// 入口：点一起听按钮（无房间时弹邀请码流程）
+function _openLtCodeModal() {
+  var body = document.getElementById('lt-code-body');
+  var title = document.getElementById('lt-code-title');
+  if (title) title.textContent = '邀请码一起听';
+  if (body) {
+    body.innerHTML = '<div class="btn-row" style="flex-direction:column;gap:10px">' +
+      '<button class="modal-btn primary" style="width:100%" onclick="_ltCodeHost()">我是房主，生成邀请码</button>' +
+      '<button class="modal-btn" style="width:100%" onclick="_ltCodeGuestStart()">我有邀请码，加入</button>' +
+      '</div>' +
+      '<p style="font-size:12px;color:rgba(255,255,255,.4);line-height:1.6;margin:16px 0 0">无需服务器和账号：房主生成码发给好友，好友回一个码即建立直连。</p>';
+  }
+  _ltCodeModal(true);
+}
+function _ltCodeGuestStart() {
+  var body = document.getElementById('lt-code-body');
+  var title = document.getElementById('lt-code-title');
+  if (title) title.textContent = '粘贴邀请码';
+  if (body) {
+    body.innerHTML = '<textarea id="lt-code-input" placeholder="粘贴房主发来的 TWT1. 开头的邀请码" style="width:100%;height:96px;box-sizing:border-box;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.12);border-radius:8px;color:rgba(255,255,255,.85);font-size:11px;padding:8px;font-family:monospace;resize:none"></textarea>' +
+      '<div class="btn-row" style="margin-top:10px"><button class="modal-btn" onclick="_ltCodeModal(false)">取消</button><button class="modal-btn primary" onclick="_ltCodeGuestSubmit()">生成回复码</button></div>';
+  }
+}
+function _ltCodeGuestSubmit() {
+  var input = document.getElementById('lt-code-input');
+  _ltCodeGuest(input ? input.value : '');
+}
+function _setFriendOnline(friendCode, online) {
+  var changed = false;
+  for (var i = 0; i < _friendsData.friends.length; i++) {
+    if (_friendsData.friends[i].friendCode === friendCode) {
+      var st = online ? 'online' : 'offline';
+      if (_friendsData.friends[i].status !== st) { _friendsData.friends[i].status = st; changed = true; }
+      _friendsData.friends[i].lastSeen = Date.now();
+      break;
+    }
+  }
+  if (changed) { _saveFriendsData(); renderFriendsList(); }
+}
 function _setupDataChannel(dc, friendCode) {
-  dc.onopen = function() { console.log('[P2P] connected to', friendCode); };
-  dc.onclose = function() { console.log('[P2P] disconnected from', friendCode); };
+  dc.onopen = function() {
+    console.log('[P2P] connected to', friendCode);
+    _setFriendOnline(friendCode, true);
+    _ltCodeDcOpen(dc);
+  };
+  dc.onclose = function() {
+    console.log('[P2P] disconnected from', friendCode);
+    _setFriendOnline(friendCode, false);
+    if (_friendsDcMap[friendCode] === dc) delete _friendsDcMap[friendCode];
+  };
   dc.onmessage = function(e) {
     var msg;
     try { msg = JSON.parse(e.data); } catch (err) { return; }
@@ -33041,6 +33333,9 @@ function _handleP2PMessage(msg, fromCode) {
   switch (msg.type) {
     case 'lt_invite':
       _handleLtInvite(msg, fromCode);
+      break;
+    case 'lt_start':
+      _ltCodeHandleStart(msg, fromCode);
       break;
     case 'lt_accept':
       _handleLtAccept(msg, fromCode);
@@ -33442,7 +33737,7 @@ function _showLtBar() {
   }
 }
 function toggleLtChatPanel() {
-  if (!_ltRoom) { showToast('请先发起或接受一起听邀请'); return; }
+  if (!_ltRoom) { _openLtCodeModal(); return; }
   var panel = document.getElementById('lt-chat-panel');
   if (!panel) return;
   if (panel.classList.contains('show')) {
@@ -33526,6 +33821,10 @@ function _twtLog(text) {
   _twtLog('init: myId=' + _friendsData.myId + ' friendCode=' + _friendsData.friendCode + ' name=' + _friendsData.myName + ' friends=' + _friendsData.friends.length);
   _connectSignaling();
   setInterval(function() {
+    var hasOpenDc = false;
+    for (var dcKey in _friendsDcMap) {
+      if (_friendsDcMap[dcKey] && _friendsDcMap[dcKey].readyState === 'open') { hasOpenDc = true; break; }
+    }
     if (_friendsWsReady) {
       _broadcastStatus();
       // 清理握手失败的 P2P 连接，允许重试
@@ -33542,6 +33841,9 @@ function _twtLog(text) {
         var fr = _friendsData.friends[k];
         if (fr.status && fr.status !== 'offline' && !_friendsPcMap[fr.friendCode]) _initP2P(fr.friendCode);
       }
+    } else if (hasOpenDc) {
+      // 邀请码直连模式：仅走 DataChannel 广播状态
+      _broadcastStatus();
     }
   }, (_getSettings().broadcast || 10) * 1000);
   var _lastLtPlaying = false;
