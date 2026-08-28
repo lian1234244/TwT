@@ -27943,9 +27943,14 @@ function updateProgressDetailText() {
 }
 function initUpdatePreview() {
   renderUpdatePreviewPanel();
-  setUpdatePreviewVisible(true);
+  setUpdatePreviewVisible(false);
   checkLatestUpdate();
   setTimeout(startUpdateIconBreathing, 760);
+  // 每 30 分钟复查一次新版本（下载/安装中跳过）
+  setInterval(function(){
+    if (updatePreviewState.status === 'downloading' || updatePreviewState.status === 'opening') return;
+    checkLatestUpdate();
+  }, 30 * 60 * 1000);
 }
 
 function setUpdatePreviewVisible(visible) {
@@ -27966,16 +27971,22 @@ function setUpdatePreviewVisible(visible) {
   }
 }
 
+var _updateCheckInFlight = false;
 async function checkLatestUpdate() {
+  if (_updateCheckInFlight) return;
+  _updateCheckInFlight = true;
   try {
     var data = await apiJson('/api/update/latest?t=' + Date.now());
     applyLatestUpdateInfo(data);
   } catch (e) {
-    updatePreviewState.preview = true;
+    // 检查失败：静默 60 秒后重试，不显示预览图标
+    updatePreviewState.configured = false;
     updatePreviewState.updateAvailable = false;
-    updatePreviewState.hero = '当前版本，更新检测已就绪。';
     renderUpdatePreviewPanel();
-    setUpdatePreviewVisible(true);
+    setUpdatePreviewVisible(false);
+    setTimeout(checkLatestUpdate, 60000);
+  } finally {
+    _updateCheckInFlight = false;
   }
 }
 
@@ -27998,7 +28009,15 @@ function applyLatestUpdateInfo(data) {
     updatePreviewState.notes = release.notes.slice(0, 4);
   }
   renderUpdatePreviewPanel();
-  setUpdatePreviewVisible(updatePreviewState.updateAvailable || updatePreviewState.preview);
+  setUpdatePreviewVisible(updatePreviewState.updateAvailable);
+  // 发现新版本：主动弹窗提示（每个版本只弹一次），并常驻右上角图标
+  if (updatePreviewState.updateAvailable && updatePreviewState._popupShownFor !== updatePreviewState.version) {
+    updatePreviewState._popupShownFor = updatePreviewState.version;
+    showToast('发现新版本 v' + updatePreviewState.version);
+    setTimeout(function(){
+      if (!updatePreviewState.open && updatePreviewState.updateAvailable) openUpdatePanel();
+    }, 2400);
+  }
 }
 
 function startUpdateIconBreathing() {
@@ -28073,7 +28092,8 @@ function syncUpdatePreviewStateClass() {
     else if (isReady && isPatch) label.textContent = '补丁已应用';
     else if (isReady && updatePreviewState.installerOpened) label.textContent = '正在安装更新';
     else if (isReady && updatePreviewState.installerPath) label.textContent = '自动安装中';
-    else if (isReady) label.textContent = updatePreviewState.configured ? '立即安装' : '预览完成';
+    else if (isReady) label.textContent = updatePreviewState.configured ? '立即安装' : '当前已是最新';
+    else if (!updatePreviewState.updateAvailable) label.textContent = '当前已是最新';
     else label.textContent = updatePreviewState.patchAvailable ? '安装快速补丁' : ((canDownloadUpdate || canOpenRelease) ? '下载完整安装包' : '立即更新');
   }
   if (btn) btn.disabled = false;
@@ -28404,32 +28424,9 @@ function startUpdatePreviewDownload() {
     }
     return;
   }
-  if (updatePreviewState.status === 'ready') {
-    if (window.gsap) {
-      var modal = document.querySelector('#update-modal .update-modal');
-      if (modal) window.gsap.fromTo(modal, { boxShadow: '0 30px 100px rgba(0,0,0,.62),0 0 0 1px rgba(244,210,138,.16)' }, { boxShadow: '0 30px 100px rgba(0,0,0,.62),0 0 34px rgba(244,210,138,.18)', duration: 0.52, yoyo: true, repeat: 1, ease: 'sine.inOut' });
-    }
-    showToast('正式接入后将重启并安装新版');
-    return;
-  }
-  if (updatePreviewState.status === 'downloading') return;
-  if (updatePreviewState.timer) clearInterval(updatePreviewState.timer);
-  updatePreviewState.status = 'downloading';
-  updateUpdatePreviewProgress(0);
-  var btn = document.getElementById('update-primary-btn');
-  if (btn && window.gsap) window.gsap.fromTo(btn, { scale: 0.985 }, { scale: 1, duration: 0.34, ease: 'back.out(1.45)', overwrite: true });
-  updatePreviewState.timer = setInterval(function(){
-    var next = updatePreviewState.progress + 3.2 + Math.random() * 7.5;
-    if (next >= 100) {
-      clearInterval(updatePreviewState.timer);
-      updatePreviewState.timer = null;
-      updatePreviewState.status = 'ready';
-      updateUpdatePreviewProgress(100);
-      pulseUpdateReady();
-    } else {
-      updateUpdatePreviewProgress(next);
-    }
-  }, 260);
+  if (updatePreviewState.status === 'downloading' || updatePreviewState.status === 'opening') return;
+  // 没有可用更新：不再进入模拟下载，直接提示
+  showToast(updatePreviewState.updateAvailable ? '正在检查更新，请稍候' : '当前已是最新版本');
 }
 
 function pulseUpdateReady() {
