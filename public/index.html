@@ -3463,6 +3463,18 @@ html.control-glass-svg-ok #visual-guide-btn:hover{
   </div>
 </div>
 
+<!-- 一起听邀请模态 -->
+<div id="lt-invite-modal" class="modal-mask">
+  <div class="modal" style="max-width:360px">
+    <h2>一起听邀请</h2>
+    <p id="lt-invite-text" style="font-size:15px;color:rgba(255,255,255,.75);line-height:1.6;margin:16px 0 4px"></p>
+    <div class="btn-row">
+      <button class="modal-btn" onclick="_respondLtInvite(false)">拒绝</button>
+      <button class="modal-btn primary" onclick="_respondLtInvite(true)">接受</button>
+    </div>
+  </div>
+</div>
+
 <!-- 设置模态 -->
 <div id="settings-modal" class="modal-mask">
   <div class="modal" style="max-width:440px;max-height:80vh;overflow-y:auto">
@@ -32482,6 +32494,10 @@ var _ltChatLog = [];
 var _ltPeekTimer = null;
 var _ltClockOffset = 0;
 var _ltPingTimer = null;
+var _friendsHbTimer = null;
+var _lastSentAvatar = null;
+var _ltInvitePending = null;
+var TWT_CONFIG_MIRRORS = ['https://gh.llkk.cc/', 'https://ghfast.top/', 'https://gh-proxy.com/'];
 
 function _loadFriendsData() {
   if (_friendsData) return _friendsData;
@@ -32745,39 +32761,28 @@ function _connectSignaling() {
   if (!TWT_SIGNALING_URL) {
     _friendsConnectError = '获取服务器地址...';
     _updateFriendsSub();
-    var done = false;
-    var timer = setTimeout(function() {
-      if (!done) {
-        done = true;
-        _friendsConnectError = '获取地址超时，5秒后重试...';
+    var urls = TWT_CONFIG_MIRRORS.map(function(m) { return m + TWT_CONFIG_URL; });
+    urls.push(TWT_CONFIG_URL);
+    var idx = 0;
+    var tryNext = function() {
+      if (idx >= urls.length) {
+        _friendsConnectError = '获取地址失败，5秒后重试...';
         _updateFriendsSub();
         setTimeout(_connectSignaling, 5000);
+        return;
       }
-    }, 8000);
-    fetch(TWT_CONFIG_URL + '?t=' + Date.now())
-      .then(function(r) { return r.json(); })
-      .then(function(cfg) {
-        if (done) return;
-        done = true;
-        clearTimeout(timer);
+      var u = urls[idx++] + '?t=' + Date.now();
+      fetch(u).then(function(r) { return r.json(); }).then(function(cfg) {
         if (cfg && cfg.url) {
           TWT_SIGNALING_URL = cfg.url.replace('wss://', 'https://').replace('ws://', 'http://');
           _friendsConnectError = '';
           _doConnectSignaling();
         } else {
-          _friendsConnectError = '配置无效，5秒后重试...';
-          _updateFriendsSub();
-          setTimeout(_connectSignaling, 5000);
+          tryNext();
         }
-      })
-      .catch(function(e) {
-        if (done) return;
-        done = true;
-        clearTimeout(timer);
-        _friendsConnectError = '获取地址失败，5秒后重试...';
-        _updateFriendsSub();
-        setTimeout(_connectSignaling, 5000);
-      });
+      }).catch(function() { tryNext(); });
+    };
+    tryNext();
     return;
   }
   _doConnectSignaling();
@@ -32799,7 +32804,8 @@ function _doConnectSignaling() {
     _updateFriendsSub();
     _broadcastStatus();
     _twtPoll();
-    setInterval(function() { _twtSend({ type: 'heartbeat', fromCode: _friendsData.friendCode }); }, (_getSettings().heartbeat || 30) * 1000);
+    if (_friendsHbTimer) clearInterval(_friendsHbTimer);
+    _friendsHbTimer = setInterval(function() { _twtSend({ type: 'heartbeat', fromCode: _friendsData.friendCode }); }, (_getSettings().heartbeat || 30) * 1000);
   }).catch(function(e) {
     _twtLog('register failed: ' + (e.message || e));
     _friendsConnectError = '连接失败，3秒后重试...';
@@ -32909,14 +32915,18 @@ function _handleFriendAccept(msg) {
   renderFriendsList();
 }
 function _handleStatusUpdate(msg) {
+  var changed = false;
   for (var i = 0; i < _friendsData.friends.length; i++) {
     if (_friendsData.friends[i].friendCode === msg.fromCode) {
       _friendsData.friends[i].status = msg.status || 'online';
       _friendsData.friends[i].currentSong = msg.song || null;
       _friendsData.friends[i].lastSeen = Date.now();
+      if (msg.name && _friendsData.friends[i].name !== msg.name) { _friendsData.friends[i].name = msg.name; changed = true; }
+      if (msg.avatar && _friendsData.friends[i].avatar !== msg.avatar) { _friendsData.friends[i].avatar = msg.avatar; changed = true; }
       break;
     }
   }
+  if (changed) _saveFriendsData();
   renderFriendsList();
 }
 function _handleFriendOffline(msg) {
@@ -32949,15 +32959,22 @@ function _broadcastStatus() {
   if (!_friendsWsReady) return;
   var song = _getMySongInfo();
   var status = song ? 'listening' : 'online';
+  var avatarChanged = _friendsData.myAvatar !== _lastSentAvatar;
   for (var i = 0; i < _friendsData.friends.length; i++) {
     if (_friendsData.friends[i].status === 'offline') continue;
     var fc = _friendsData.friends[i].friendCode;
     var safeSong = song ? { name: song.name, artist: song.artist, platform: song.platform, id: song.id } : null;
-    _twtSend({ type: 'status_update', to: fc, fromCode: _friendsData.friendCode, status: status, song: safeSong });
+    // 携带昵称让好友看到改名；头像仅在变化时发送，避免每次广播都传大体积 base64
+    var st = { type: 'status_update', to: fc, fromCode: _friendsData.friendCode, status: status, song: safeSong, name: _friendsData.myName };
+    if (avatarChanged) st.avatar = _friendsData.myAvatar;
+    _twtSend(st);
   }
+  _lastSentAvatar = _friendsData.myAvatar;
 }
 function _initP2P(friendCode) {
   if (_friendsPcMap[friendCode]) return;
+  // 确定性发起规则：好友码字典序较小的一方创建 offer，避免双方同时发 offer 导致 WebRTC 握手冲突
+  if (_friendsData.friendCode > friendCode) return;
   try {
     var pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
     var dc = pc.createDataChannel('twt-sync', { ordered: true });
@@ -33246,8 +33263,27 @@ function inviteListenTogether(friendCode) {
   _showLtBar();
 }
 function _handleLtInvite(msg, fromCode) {
-  var songName = msg.song ? msg.song.name + ' - ' + msg.song.artist : '';
-  if (confirm(msg.host + ' 邀请你一起听' + (songName ? '：' + songName : '') + '\n\n是否接受？')) {
+  if (_ltRoom) {
+    // 已在房间中，自动拒绝新邀请，避免覆盖当前房间状态
+    _twtSend({ type: 'lt_reject', to: fromCode, fromCode: _friendsData.friendCode });
+    showToast('已在一起听房间中，已自动拒绝新邀请');
+    return;
+  }
+  _ltInvitePending = { msg: msg, fromCode: fromCode };
+  var songName = msg.song ? msg.song.name + ' - ' + (msg.song.artist || '') : '';
+  var textEl = document.getElementById('lt-invite-text');
+  if (textEl) textEl.textContent = msg.host + ' 邀请你一起听' + (songName ? '：' + songName : '');
+  var modal = document.getElementById('lt-invite-modal');
+  if (modal) modal.classList.add('show');
+}
+function _respondLtInvite(accept) {
+  var modal = document.getElementById('lt-invite-modal');
+  if (modal) modal.classList.remove('show');
+  if (!_ltInvitePending) return;
+  var msg = _ltInvitePending.msg;
+  var fromCode = _ltInvitePending.fromCode;
+  _ltInvitePending = null;
+  if (accept) {
     _twtSend({ type: 'lt_accept', to: fromCode, fromCode: _friendsData.friendCode, roomCode: msg.roomCode });
     _ltRoom = { code: msg.roomCode, host: fromCode, peers: [fromCode], song: msg.song };
     _ltIsHost = false;
@@ -33261,8 +33297,12 @@ function _handleLtInvite(msg, fromCode) {
 }
 function _handleLtAccept(msg, fromCode) {
   showToast('好友已加入一起听');
-  _showLtBar();
   _startLtSync();
+  // 立即推送一次完整状态，让从机马上对齐歌曲与播放进度
+  var song = _getMySongInfo();
+  if (song) _ltRoom.song = song;
+  _broadcastLtMessage({ type: 'lt_state', song: song, currentTime: audio ? audio.currentTime : 0, playing: playing, timestamp: Date.now() });
+  _showLtBar();
 }
 function _startLtSync() {
   if (_ltSyncTimer) clearInterval(_ltSyncTimer);
@@ -33300,6 +33340,7 @@ function _broadcastLtMessage(msg) {
 function _handleLtSync(msg) {
   if (_ltIsHost) return;
   if (msg.type === 'lt_switch' && msg.song) {
+    if (_ltRoom) { _ltRoom.song = msg.song; _showLtBar(); }
     _findAndPlaySong(msg.song);
     return;
   }
@@ -33473,7 +33514,7 @@ function sendQuickMsg(text) {
 // ---- 初始化 ----
 function _twtLog(text) {
   if (_friendsWsReady && Math.random() < 0.1) {
-    _twtSend({ type: 'debug_log', text: text, to: _friendsData.friendCode, fromCode: _friendsData.friendCode });
+    _twtSend({ type: 'debug_log', text: text, fromCode: _friendsData.friendCode });
   }
 }
 (function _initFriendsSystem() {
@@ -33485,7 +33526,23 @@ function _twtLog(text) {
   _twtLog('init: myId=' + _friendsData.myId + ' friendCode=' + _friendsData.friendCode + ' name=' + _friendsData.myName + ' friends=' + _friendsData.friends.length);
   _connectSignaling();
   setInterval(function() {
-    if (_friendsWsReady) _broadcastStatus();
+    if (_friendsWsReady) {
+      _broadcastStatus();
+      // 清理握手失败的 P2P 连接，允许重试
+      for (var code in _friendsPcMap) {
+        var pcItem = _friendsPcMap[code];
+        if (pcItem.connectionState === 'failed') {
+          try { pcItem.close(); } catch(e){}
+          delete _friendsPcMap[code];
+          delete _friendsDcMap[code];
+        }
+      }
+      // 重启或断线后自动重建与在线好友的 P2P 连接（确定性发起规则避免双方同时 offer）
+      for (var k = 0; k < _friendsData.friends.length; k++) {
+        var fr = _friendsData.friends[k];
+        if (fr.status && fr.status !== 'offline' && !_friendsPcMap[fr.friendCode]) _initP2P(fr.friendCode);
+      }
+    }
   }, (_getSettings().broadcast || 10) * 1000);
   var _lastLtPlaying = false;
   var _lastLtIdx = -1;
@@ -33499,7 +33556,11 @@ function _twtLog(text) {
     }
     if (nowIdx !== _lastLtIdx && nowIdx >= 0 && playQueue[nowIdx]) {
       var song = _getMySongInfo();
-      if (song) _broadcastLtMessage({ type: 'lt_switch', song: song });
+      if (song) {
+        _broadcastLtMessage({ type: 'lt_switch', song: song });
+        _ltRoom.song = song;
+        _showLtBar();
+      }
       _lastLtIdx = nowIdx;
     }
     if (_ltRoom) {
