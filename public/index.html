@@ -1570,6 +1570,7 @@ body.desktop-shell.diy-mode #bottom-bar.stage-mode{left:50%;width:min(1080px,cal
 .friend-status{font-size:11px;color:rgba(255,255,255,.38);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:4px;line-height:1.3}
 .friend-status.listening{color:rgba(0,245,212,.72)}
 .friend-status .lt-icon-sm{width:10px;height:10px;flex-shrink:0;opacity:.7}
+.friend-status.lt-ing{color:var(--champagne)}
 .friend-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;background:rgba(255,255,255,.18);position:relative}
 .friend-dot.online{background:#4ade80;box-shadow:0 0 8px rgba(74,222,128,.55)}
 .friend-dot.listening{background:#00f5d4;box-shadow:0 0 8px rgba(0,245,212,.55)}
@@ -32504,6 +32505,7 @@ var _ltPeekTimer = null;
 var _ltClockOffset = 0;
 var _ltPingTimer = null;
 var _friendsHbTimer = null;
+var _friendsConnectAttempts = 0;
 var _lastSentAvatar = null;
 var _ltInvitePending = null;
 var TWT_CONFIG_MIRRORS = ['https://gh.llkk.cc/', 'https://ghfast.top/', 'https://gh-proxy.com/'];
@@ -32735,6 +32737,10 @@ function _getMySongInfo() {
   var s = playQueue[currentIdx];
   return { name: s.name || '', artist: s.artist || '', platform: s.provider || 'netease', id: s.id || s.mid || s.hash || '', url: s.url || '' };
 }
+function _ltSafeSong(song) {
+  if (!song) return null;
+  return { name: song.name || '', artist: song.artist || '', platform: song.platform || 'netease', id: song.id || '' };
+}
 var _friendsConnectError = '';
 var _friendsTriedLocal = false;
 function _twtSend(msg) {
@@ -32809,6 +32815,7 @@ function _doConnectSignaling() {
     if (!r.ok) throw new Error('register http ' + r.status);
     _friendsWsReady = true;
     _friendsConnectError = '';
+    _friendsConnectAttempts = 0;
     _twtLog('http: registered, friendCode=' + _friendsData.friendCode);
     _updateFriendsSub();
     _broadcastStatus();
@@ -32817,9 +32824,16 @@ function _doConnectSignaling() {
     _friendsHbTimer = setInterval(function() { _twtSend({ type: 'heartbeat', fromCode: _friendsData.friendCode }); }, (_getSettings().heartbeat || 30) * 1000);
   }).catch(function(e) {
     _twtLog('register failed: ' + (e.message || e));
-    _friendsConnectError = '连接失败，3秒后重试...';
+    _friendsConnectAttempts++;
+    var _retryDelays = [3000, 10000, 30000, 60000];
+    var _retryDelay = _retryDelays[Math.min(_friendsConnectAttempts - 1, _retryDelays.length - 1)];
+    if (_friendsConnectAttempts >= 3) {
+      _friendsConnectError = '服务器离线（邀请码一起听不受影响）';
+    } else {
+      _friendsConnectError = '连接失败，' + Math.round(_retryDelay / 1000) + '秒后重试...';
+    }
     _updateFriendsSub();
-    setTimeout(_doConnectSignaling, 3000);
+    setTimeout(_doConnectSignaling, _retryDelay);
   });
 }
 function _handleSignaling(msg) {
@@ -33098,8 +33112,9 @@ function _ltCodeHost() {
     return _ltWaitIce(pc);
   }).then(function(localDesc) {
     var payload = { v: 1, role: 'offer', sdp: { type: localDesc.type, sdp: localDesc.sdp }, fromCode: _friendsData.friendCode, name: _friendsData.myName, roomCode: roomCode };
-    if (song) payload.song = { name: song.name, artist: song.artist };
+    if (song) payload.song = _ltSafeSong(song);
     var code = _ltCodePack(payload);
+    if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(code).catch(function(){}); showToast('邀请码已自动复制'); }
     var body = document.getElementById('lt-code-body');
     var title = document.getElementById('lt-code-title');
     if (title) title.textContent = '生成邀请码成功';
@@ -33177,6 +33192,7 @@ function _ltCodeGuest(text) {
   }).then(function(localDesc) {
     var payload = { v: 1, role: 'answer', sdp: { type: localDesc.type, sdp: localDesc.sdp }, fromCode: _friendsData.friendCode, name: _friendsData.myName };
     var code = _ltCodePack(payload);
+    if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(code).catch(function(){}); showToast('回复码已自动复制'); }
     if (title) title.textContent = '生成回复码成功';
     if (body) {
       body.innerHTML = '<p style="font-size:13px;color:rgba(255,255,255,.6);line-height:1.6;margin:0 0 10px">' + escHtml(offer.name || '好友') + ' 邀请你一起听' + (offer.song ? '：' + escHtml(offer.song.name || '') : '') + '。把下面的回复码发给对方，对方连接后自动开始：</p>' +
@@ -33207,9 +33223,9 @@ function _ltCodeDcOpen(dc) {
   _ltCodeModal(false);
   if (peer.role === 'host') {
     var code = peer.info.fromCode;
-    _ltRoom = { code: peer.roomCode, host: _friendsData.friendCode, peers: [code], song: _getMySongInfo() };
+    var song = _ltSafeSong(_getMySongInfo());
+    _ltRoom = { code: peer.roomCode, host: _friendsData.friendCode, peers: [code], song: song };
     _ltIsHost = true;
-    var song = _getMySongInfo();
     var state = { type: 'lt_state', song: song, currentTime: audio ? audio.currentTime : 0, playing: playing, timestamp: Date.now() };
     _broadcastLtMessage({ type: 'lt_start', roomCode: peer.roomCode, song: song, state: state });
     _startLtSync();
@@ -33218,7 +33234,7 @@ function _ltCodeDcOpen(dc) {
     showToast('连接成功，开始一起听');
   } else {
     // 接受方：等待发起方 lt_start（通常瞬间到达），10秒兜底提示
-    var hostCode = peer.info.fromCode;
+
     if (peer.startTimer) clearTimeout(peer.startTimer);
     peer.startTimer = setTimeout(function() {
       if (_ltCodePeer === peer && !_ltRoom) {
@@ -33291,6 +33307,9 @@ function _setupDataChannel(dc, friendCode) {
     console.log('[P2P] disconnected from', friendCode);
     _setFriendOnline(friendCode, false);
     if (_friendsDcMap[friendCode] === dc) delete _friendsDcMap[friendCode];
+    if (_ltRoom && _ltRoom.peers && _ltRoom.peers.indexOf(friendCode) >= 0) {
+      _handleLtLeave(friendCode);
+    }
   };
   dc.onmessage = function(e) {
     var msg;
@@ -33438,14 +33457,14 @@ function renderFriendsList() {
 }
 function _renderFriendItem(f) {
   var st = f.status || 'offline';
-  var stText = st === 'listening' ? (f.currentSong ? f.currentSong.name + ' - ' + f.currentSong.artist : '正在听') : (st === 'online' ? '在线' : '离线');
   var ltActive = _ltRoom && _ltRoom.peers && _ltRoom.peers.indexOf(f.friendCode) >= 0;
+  var stText = ltActive ? '一起听中' : (st === 'listening' ? (f.currentSong ? f.currentSong.name + ' - ' + f.currentSong.artist : '正在听') : (st === 'online' ? '在线' : '离线'));
   var initial = (f.name || '?').charAt(0).toUpperCase();
-  var listeningIcon = st === 'listening' ? '<svg class="lt-icon-sm" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 18v-6a9 9 0 0118 0v6"/><path d="M21 19a2 2 0 01-2 2h-1v-7h3z"/><path d="M3 19a2 2 0 002 2h1v-7H3z"/></svg>' : '';
+  var listeningIcon = (st === 'listening' || ltActive) ? '<svg class="lt-icon-sm" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 18v-6a9 9 0 0118 0v6"/><path d="M21 19a2 2 0 01-2 2h-1v-7h3z"/><path d="M3 19a2 2 0 002 2h1v-7H3z"/></svg>' : '';
   return '<div class="friend-item">' +
     '<div class="friend-avatar ' + st + '" style="display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:rgba(255,255,255,.7)">' + escHtml(initial) + '</div>' +
     '<div class="friend-info"><div class="friend-name"><div class="friend-dot ' + st + '"></div>' + escHtml(f.name) + '</div>' +
-    '<div class="friend-status ' + (st === 'listening' ? 'listening' : '') + '">' + listeningIcon + escHtml(stText) + '</div></div>' +
+    '<div class="friend-status ' + (st === 'listening' ? 'listening' : '') + (ltActive ? ' lt-ing' : '') + '">' + listeningIcon + escHtml(stText) + '</div></div>' +
     '<div class="friend-actions">' +
     '<button class="friend-act-btn' + (ltActive ? ' lt-active' : '') + '" onclick="inviteListenTogether(\'' + f.friendCode + '\')" title="一起听">' +
     '<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 18v-6a9 9 0 0118 0v6"/><path d="M21 19a2 2 0 01-2 2h-1v-7h3z"/><path d="M3 19a2 2 0 002 2h1v-7H3z"/></svg>' +
@@ -33523,7 +33542,15 @@ function confirmAddFriend() {
   for (var i = 0; i < _friendsData.friends.length; i++) {
     if (_friendsData.friends[i].friendCode === code) { stEl.textContent = '已经是好友了'; stEl.className = 'friends-status-msg error'; _twtLog('confirmAddFriend: blocked (already friend)'); return; }
   }
-  if (!_friendsWsReady) { stEl.textContent = _friendsConnectError ? ('连接失败: ' + _friendsConnectError) : '正在连接服务器...'; stEl.className = 'friends-status-msg error'; _twtLog('confirmAddFriend: blocked (ws not ready)'); _connectSignaling(); return; }
+  if (!_friendsWsReady) {
+    stEl.textContent = _friendsConnectAttempts >= 3
+      ? '在线好友暂不可用：点上方耳机按钮，用邀请码一起听直连'
+      : (_friendsConnectError ? ('连接中: ' + _friendsConnectError) : '正在连接服务器...');
+    stEl.className = 'friends-status-msg error';
+    _twtLog('confirmAddFriend: blocked (ws not ready)');
+    _connectSignaling();
+    return;
+  }
   _twtLog('confirmAddFriend: sending friendRequest to=' + code + ' fromCode=' + _friendsData.friendCode + ' fromId=' + _friendsData.myId + ' name=' + _friendsData.myName);
   _twtSend({ type: 'friendRequest', to: code, fromCode: _friendsData.friendCode, fromId: _friendsData.myId, name: _friendsData.myName, avatar: _friendsData.myAvatar });
   stEl.textContent = '请求已发送，等待对方确认'; stEl.className = 'friends-status-msg success';
@@ -33551,7 +33578,7 @@ function copyMyFriendCode() {
 // ---- 一起听 ----
 function inviteListenTogether(friendCode) {
   if (_ltRoom) { showToast('已经在一起听房间中'); return; }
-  var song = _getMySongInfo();
+  var song = _ltSafeSong(_getMySongInfo());
   _ltRoom = { code: _genFriendCode(), host: _friendsData.friendCode, peers: [friendCode], song: song };
   _ltIsHost = true;
   _twtSend({ type: 'lt_invite', to: friendCode, fromCode: _friendsData.friendCode, roomCode: _ltRoom.code, host: _friendsData.myName, song: song });
@@ -33594,8 +33621,7 @@ function _respondLtInvite(accept) {
 function _handleLtAccept(msg, fromCode) {
   showToast('好友已加入一起听');
   _startLtSync();
-  // 立即推送一次完整状态，让从机马上对齐歌曲与播放进度
-  var song = _getMySongInfo();
+  var song = _ltSafeSong(_getMySongInfo());
   if (song) _ltRoom.song = song;
   _broadcastLtMessage({ type: 'lt_state', song: song, currentTime: audio ? audio.currentTime : 0, playing: playing, timestamp: Date.now() });
   _showLtBar();
@@ -33858,7 +33884,7 @@ function _twtLog(text) {
       _lastLtPlaying = nowPlaying;
     }
     if (nowIdx !== _lastLtIdx && nowIdx >= 0 && playQueue[nowIdx]) {
-      var song = _getMySongInfo();
+      var song = _ltSafeSong(_getMySongInfo());
       if (song) {
         _broadcastLtMessage({ type: 'lt_switch', song: song });
         _ltRoom.song = song;
