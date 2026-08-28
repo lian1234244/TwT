@@ -1,0 +1,12 @@
+name = "twt-signaling"
+main = "worker.js"
+compatibility_date = "2024-09-23"
+
+# Durable Object 绑定（免费版必须用 SQLite 存储类）
+[[durable_objects.bindings]]
+name = "SIGNALING"
+class_name = "SignalingDO"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["SignalingDO"]
