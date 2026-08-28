@@ -1,17 +1,17 @@
 {
-  "name": "mineradio",
-  "productName": "Mineradio",
-  "version": "1.1.5",
-  "description": "沉浸式音乐播放器，融合天气电台、歌词舞台、粒子视觉和 3D 歌单架。",
+  "name": "twt",
+  "productName": "TwT",
+  "version": "1.1.6",
+  "description": "TwT - 沉浸式音乐播放器二创版",
   "author": "Mikalinsa",
   "license": "GPL-3.0-only",
-  "homepage": "https://github.com/Mikalinsa/Mineradio-derivative-work#readme",
+  "homepage": "https://github.com/lian1234244/TwT#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Mikalinsa/Mineradio-derivative-work.git"
+    "url": "git+https://github.com/lian1234244/TwT.git"
   },
   "bugs": {
-    "url": "https://github.com/Mikalinsa/Mineradio-derivative-work/issues"
+    "url": "https://github.com/lian1234244/TwT/issues"
   },
   "main": "desktop/main.js",
   "private": true,
@@ -26,9 +26,9 @@
     "release:manifest": "node scripts/prepare-publication-manifest.js"
   },
   "build": {
-    "appId": "com.mineradio.desktop",
-    "productName": "Mineradio",
-    "copyright": "Mineradio Mikalinsa Edition - derivative work by Mikalinsa",
+    "appId": "com.twt.desktop",
+    "productName": "TwT",
+    "copyright": "TwT - derivative work",
     "directories": {
       "output": "dist",
       "buildResources": "build"
@@ -70,9 +70,9 @@
     ],
     "asar": false,
     "win": {
-      "executableName": "Mineradio",
+      "executableName": "TwT",
       "icon": "build/icon.ico",
-      "signAndEditExecutable": false,
+      "signAndEditExecutable": true,
       "target": [
         {
           "target": "nsis",
@@ -80,7 +80,8 @@
             "x64"
           ]
         }
-      ]
+      ],
+      "signExecutable": false
     },
     "nsis": {
       "oneClick": false,
@@ -93,31 +94,31 @@
       ],
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Mineradio",
+      "shortcutName": "TwT",
       "installerIcon": "build/icon.ico",
       "uninstallerIcon": "build/icon.ico",
       "installerSidebar": "build/installerSidebar.bmp",
       "uninstallerSidebar": "build/installerSidebar.bmp",
       "installerHeader": "build/installerHeader.bmp",
       "include": "build/installer.nsh",
-      "artifactName": "Mineradio-Mikalinsa-${version}-Setup.${ext}"
+      "artifactName": "TwT-${version}-Setup.${ext}"
     },
     "publish": [
       {
         "provider": "github",
-        "owner": "Mikalinsa",
-        "repo": "Mineradio-derivative-work"
+        "owner": "lian1234244",
+        "repo": "TwT"
       }
     ]
   },
   "mineradio": {
-    "edition": "Mikalinsa Edition",
+    "edition": "TwT Edition",
     "creator": "Mikalinsa",
     "update": {
       "provider": "github",
-      "owner": "Mikalinsa",
-      "repo": "Mineradio-derivative-work",
-      "preview": true,
+      "owner": "lian1234244",
+      "repo": "TwT",
+      "preview": false,
       "preferMirrors": true,
       "mirrors": [
         "https://gh.llkk.cc/",

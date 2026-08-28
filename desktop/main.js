@@ -44,8 +44,8 @@ const WINDOWED_SCALE = 3 / 4;
 const WINDOWED_MARGIN = 32;
 const MIN_WINDOWED_WIDTH = 960;
 const MIN_WINDOWED_HEIGHT = 540;
-const APP_NAME = 'Mineradio';
-const APP_USER_MODEL_ID = 'com.mineradio.desktop';
+const APP_NAME = 'TwT';
+const APP_USER_MODEL_ID = 'com.twt.desktop';
 const APP_ICON_CANDIDATES = [
   path.join(__dirname, 'assets', 'icon.ico'),
   path.join(__dirname, 'assets', 'icon.png'),
@@ -68,7 +68,7 @@ if (customUserDataArg) {
     fs.mkdirSync(customUserDataDir, { recursive: true });
     app.setPath('userData', customUserDataDir);
   } catch (error) {
-    console.error('Custom Mineradio user data directory rejected:', error.message);
+    console.error('Custom TwT user data directory rejected:', error.message);
   }
 }
 
@@ -193,8 +193,8 @@ function handleStartupFailure(error) {
   const logFile = startupLogPath();
   dialog.showMessageBox({
     type: 'error',
-    title: 'Mineradio 启动失败',
-    message: 'Mineradio 未能完成启动。',
+    title: 'TwT 启动失败',
+    message: 'TwT 未能完成启动。',
     detail: `请重新打开软件；若问题持续，请提供启动日志：\n${logFile}`,
     buttons: ['确定'],
     noLink: true,
@@ -254,7 +254,7 @@ function restoreMainWindowFromTray() {
 function rebuildTrayMenu() {
   if (!tray || tray.isDestroyed()) return;
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: '打开 Mineradio', click: restoreMainWindowFromTray },
+    { label: '打开 TwT', click: restoreMainWindowFromTray },
     { type: 'separator' },
     { label: trayPlaybackState.playing ? '暂停' : '播放', click: () => sendTrayAction('togglePlay') },
     { label: '上一首', click: () => sendTrayAction('prevTrack') },
@@ -462,7 +462,7 @@ function ensureDesktopShortcut() {
       target,
       cwd: path.dirname(target),
       args: '',
-      description: 'Mineradio desktop music player',
+      description: 'TwT desktop music player',
       icon: fs.existsSync(APP_ICON_ICO) ? APP_ICON_ICO : target,
       iconIndex: 0,
       appUserModelId: APP_USER_MODEL_ID,
@@ -1272,7 +1272,7 @@ function createDesktopLyricsWindow(payload = {}) {
     focusable: false,
     skipTaskbar: true,
     show: false,
-    title: 'Mineradio Desktop Lyrics',
+    title: 'TwT Desktop Lyrics',
     webPreferences: {
       preload: path.join(__dirname, 'overlay-preload.js'),
       contextIsolation: true,
@@ -1401,7 +1401,7 @@ function createWallpaperWindow(payload = {}) {
     focusable: false,
     skipTaskbar: true,
     show: false,
-    title: 'Mineradio Wallpaper',
+    title: 'TwT Wallpaper',
     webPreferences: {
       preload: path.join(__dirname, 'overlay-preload.js'),
       contextIsolation: true,
@@ -1482,7 +1482,7 @@ ipcMain.handle('mineradio-export-json-file', async (event, payload = {}) => {
     const owner = getSenderWindow(event);
     const defaultName = String(payload.defaultName || 'mineradio-export.json').replace(/[\\/:*?"<>|]+/g, '-');
     const result = await dialog.showSaveDialog(owner, {
-      title: '导出 Mineradio 存档',
+      title: '导出 TwT 存档',
       defaultPath: defaultName.toLowerCase().endsWith('.json') ? defaultName : `${defaultName}.json`,
       filters: [{ name: 'JSON', extensions: ['json'] }],
     });
@@ -1499,7 +1499,7 @@ ipcMain.handle('mineradio-import-json-file', async (event) => {
   try {
     const owner = getSenderWindow(event);
     const result = await dialog.showOpenDialog(owner, {
-      title: '导入 Mineradio 存档',
+      title: '导入 TwT 存档',
       properties: ['openFile'],
       filters: [{ name: 'JSON', extensions: ['json'] }],
     });
@@ -2066,8 +2066,8 @@ async function runObsSceneCapture(payload, output, cacheDir) {
   try {
     client = await connectObsWithReuse(obsPath, port);
     let captureProfile = await switchObsCaptureProfile(client, false);
-    const sceneName = 'Mineradio Wallpaper Capture';
-    const inputName = 'Mineradio Wallpaper Pop-out';
+    const sceneName = 'TwT Wallpaper Capture';
+    const inputName = 'TwT Wallpaper Pop-out';
     const popoutWindow = await findWallpaperPopoutWindow();
     if (!popoutWindow) {
       appendWallpaperObsLog('POP_OUT_WINDOW_MISSING before CreateInput');
@@ -2414,6 +2414,30 @@ ipcMain.handle('mineradio-open-update-installer', async (_event, filePath) => {
     return error ? { ok: false, error } : { ok: true };
   } catch (e) {
     return { ok: false, error: e.message || 'OPEN_UPDATE_FAILED' };
+  }
+});
+
+// 静默安装更新：以 /S 参数启动安装器（自动装回原目录），随后退出当前应用让位
+ipcMain.handle('mineradio-apply-update-installer', async (_event, filePath) => {
+  try {
+    const target = path.resolve(String(filePath || ''));
+    const updateDir = path.resolve(getUpdateDownloadDir());
+    if (!target || !target.startsWith(updateDir + path.sep)) {
+      return { ok: false, error: 'INVALID_UPDATE_PATH' };
+    }
+    if (!fs.existsSync(target)) return { ok: false, error: 'UPDATE_FILE_MISSING' };
+    const updater = spawn(target, ['/S'], {
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: true,
+    });
+    updater.unref();
+    // 给安装器留出启动时间，安装器会等待本进程退出后再覆盖文件
+    appIsQuitting = true;
+    setTimeout(() => app.exit(0), 1200);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e.message || 'APPLY_UPDATE_FAILED' };
   }
 });
 

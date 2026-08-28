@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld('desktopWindow', {
   openKuwoMusicLogin: () => ipcRenderer.invoke('kuwo-music-open-login'),
   clearKuwoMusicLogin: () => ipcRenderer.invoke('kuwo-music-clear-login'),
   openUpdateInstaller: (filePath) => ipcRenderer.invoke('mineradio-open-update-installer', filePath),
+  applyUpdateInstaller: (filePath) => ipcRenderer.invoke('mineradio-apply-update-installer', filePath),
   restartApp: () => ipcRenderer.invoke('mineradio-restart-app'),
   configureGlobalHotkeys: (bindings) => ipcRenderer.invoke('mineradio-hotkeys-configure-global', bindings || []),
   updateTrayPlaybackState: (state) => ipcRenderer.invoke('mineradio-tray-playback-state', state || {}),

@@ -39,9 +39,9 @@ assert.strictEqual(lock.version, pkg.version);
 assert.strictEqual(lock.packages[''].version, pkg.version);
 assert.match(changelog, new RegExp(`^## v${pkg.version.replace(/\./g, '\\.')}$`, 'm'));
 assert.strictEqual(pkg.author, 'Mikalinsa');
-assert.strictEqual(pkg.mineradio.edition, 'Mikalinsa Edition');
+assert.strictEqual(pkg.mineradio.edition, 'TwT Edition');
 assert.strictEqual(pkg.mineradio.creator, 'Mikalinsa');
-assert.strictEqual(pkg.build.nsis.artifactName, 'Mineradio-Mikalinsa-${version}-Setup.${ext}');
+assert.strictEqual(pkg.build.nsis.artifactName, 'TwT-${version}-Setup.${ext}');
 assert.strictEqual(pkg.build.compression, 'maximum');
 assert.strictEqual(pkg.build.nsis.oneClick, false);
 assert.strictEqual(pkg.build.nsis.perMachine, false);
@@ -65,7 +65,7 @@ assert(!pkg.build.files.includes('build/**/*'));
   '!macro customRemoveFiles',
   'Uninstall ${PRODUCT_FILENAME}.exe',
   'MUI_INSTFILESPAGE_COLORS',
-  'MIKALINSA EDITION  /  v${VERSION}',
+  'TWT  /  v${VERSION}',
   'Sleep 900',
 ].forEach(contract => assert(installer.includes(contract), `missing installer contract: ${contract}`));
 assert(

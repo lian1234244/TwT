@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: twt-signaling
+    runtime: node
+    plan: free
+    rootDir: signaling-deploy
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production

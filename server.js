@@ -57,6 +57,140 @@ const weatherLocationUtils = require('./desktop/weather-location-utils');
 const { createKugouProvider } = require('./providers/kugou');
 const { createKuwoProvider } = require('./providers/kuwo');
 
+// ====================================================================
+//  无敌邪修：全局 HTTP Agent keep-alive + DNS 优化
+//  NeteaseCloudMusicApi 库内部请求不走我们的 agent，直接补丁全局 Agent
+// ====================================================================
+const dns = require('dns');
+dns.setDefaultResultOrder('ipv4first');
+try { dns.setServers(['223.5.5.5', '119.29.29.29', '8.8.8.8']); } catch(e) {}
+http.globalAgent.keepAlive = true;
+http.globalAgent.keepAliveMsecs = 30000;
+http.globalAgent.maxSockets = 64;
+http.globalAgent.maxFreeSockets = 32;
+http.globalAgent.timeout = 30000;
+https.globalAgent.keepAlive = true;
+https.globalAgent.keepAliveMsecs = 30000;
+https.globalAgent.maxSockets = 64;
+https.globalAgent.maxFreeSockets = 32;
+https.globalAgent.timeout = 30000;
+
+var _origHttpsRequest = https.request;
+https.request = function() {
+  var req = _origHttpsRequest.apply(https, arguments);
+  req.setTimeout(15000, function() { try { req.destroy(new Error('HTTPS_TIMEOUT_15S')); } catch(e) {} });
+  return req;
+};
+var _origHttpRequest = http.request;
+http.request = function() {
+  var req = _origHttpRequest.apply(http, arguments);
+  req.setTimeout(15000, function() { try { req.destroy(new Error('HTTP_TIMEOUT_15S')); } catch(e) {} });
+  return req;
+};
+
+// ====================================================================
+//  无敌邪修：API 响应缓存 + 连接预热
+// ====================================================================
+var _apiRespCache = new Map();
+var _API_CACHE_TTL = {
+  '/api/search': 120000,
+  '/api/cloudsearch': 120000,
+  '/api/song/url': 600000,
+  '/api/song/detail': 300000,
+  '/api/song/comments': 600000,
+  '/api/song/like/check': 300000,
+  '/api/playlist/detail': 300000,
+  '/api/playlist/tracks': 300000,
+  '/api/playlist/track/all': 300000,
+  '/api/user/playlist': 300000,
+  '/api/user/playlists': 300000,
+  '/api/personalized': 600000,
+  '/api/recommend/resource': 600000,
+  '/api/recommend/songs': 600000,
+  '/api/discover/home': 600000,
+  '/api/lyric': 86400000,
+  '/api/lyric/new': 86400000,
+  '/api/artist/detail': 3600000,
+  '/api/artist/top/song': 3600000,
+  '/api/artist/songs': 3600000,
+  '/api/like/list': 300000,
+  '/api/comment/music': 600000,
+  '/api/dj/detail': 600000,
+  '/api/dj/program': 600000,
+  '/api/dj/hot': 600000,
+  '/api/dj/sublist': 600000,
+  '/api/cover': 86400000,
+  '/api/qq/search': 120000,
+  '/api/qq/song/url': 600000,
+  '/api/qq/lyric': 86400000,
+  '/api/qq/song/comments': 600000,
+  '/api/qq/user/playlists': 300000,
+  '/api/qq/playlist/tracks': 300000,
+  '/api/qq/artist/detail': 3600000,
+  '/api/kugou/search': 120000,
+  '/api/kugou/song/url': 600000,
+  '/api/kugou/lyric': 86400000,
+  '/api/kugou/user/playlists': 300000,
+  '/api/kugou/playlist/tracks': 300000,
+  '/api/kugou/artist/detail': 3600000,
+  '/api/kuwo/user/playlists': 300000,
+  '/api/podcast/search': 120000,
+  '/api/podcast/hot': 600000,
+  '/api/podcast/detail': 600000,
+  '/api/podcast/programs': 600000,
+  '/api/podcast/my': 300000,
+  '/api/podcast/my/items': 300000,
+  '/api/platform/song/like/check': 300000,
+  '/api/platform/song/like/snapshot': 300000,
+};
+var _DEFAULT_API_TTL = 180000;
+function _cacheKey(pn, url) {
+  return pn + '?' + (url.search || '');
+}
+function _getCachedResp(pn, url) {
+  var ttl = _API_CACHE_TTL[pn] || _DEFAULT_API_TTL;
+  if (!ttl) return null;
+  var key = _cacheKey(pn, url);
+  var entry = _apiRespCache.get(key);
+  if (entry && Date.now() - entry.ts < ttl) return entry.data;
+  if (entry) _apiRespCache.delete(key);
+  return null;
+}
+function _setCachedResp(pn, url, data) {
+  if (!_API_CACHE_TTL[pn] && !_DEFAULT_API_TTL) return;
+  var key = _cacheKey(pn, url);
+  _apiRespCache.set(key, { data: data, ts: Date.now() });
+  if (_apiRespCache.size > 500) {
+    var oldest = null, oldestKey = null;
+    _apiRespCache.forEach(function(v, k) { if (!oldest || v.ts < oldest) { oldest = v.ts; oldestKey = k; } });
+    if (oldestKey) _apiRespCache.delete(oldestKey);
+  }
+}
+function _cachedSendJson(res, pn, url, data, status) {
+  if (!status || status === 200) {
+    if (data && !data.error) _setCachedResp(pn, url, data);
+  }
+  sendJSON(res, data, status);
+}
+function _preconnectUpstream() {
+  _ensureKeepAliveAgents();
+  var targets = [
+    'https://music.163.com/',
+    'https://interface3.music.163.com/',
+  ];
+  targets.forEach(function(t) {
+    try {
+      var u = new URL(t);
+      var req = https.request(u, { method: 'GET', agent: _keepaliveHttpsAgent, timeout: 5000 }, function(resp) {
+        resp.resume();
+      });
+      req.on('error', function() {});
+      req.on('timeout', function() { req.destroy(); });
+      req.end();
+    } catch(e) {}
+  });
+}
+
 // Electron preview builds may outlive the terminal that launched them. Ignore a
 // closed console pipe so a later search log cannot terminate the main process.
 ['log', 'warn', 'error'].forEach(method => {
@@ -377,6 +511,7 @@ function serveWallpaperWebFile(req, res, pn) {
   fs.createReadStream(file).pipe(res);
 }
 function sendJSON(res, data, status) {
+  res._twtCacheData = data;
   res.writeHead(status || 200, {
     'Content-Type': 'application/json; charset=utf-8',
     'Access-Control-Allow-Origin': '*',
@@ -620,7 +755,7 @@ function normalizeManifestUpdateInfo(data) {
   const assetUrls = [downloadUrl].concat(Array.isArray(asset.downloadUrls) ? asset.downloadUrls : []);
   const patchUrls = patch ? [patch.downloadUrl].concat(Array.isArray(patch.downloadUrls) ? patch.downloadUrls : []) : [];
   const patchInfo = patch && patch.downloadUrl ? {
-    name: patch.name || updateAssetNameFromUrl(patch.downloadUrl) || `Mineradio-${APP_VERSION}→${latestVersion}.patch.json`,
+    name: patch.name || updateAssetNameFromUrl(patch.downloadUrl) || `TwT-${APP_VERSION}→${latestVersion}.patch.json`,
     size: Number(patch.size || 0) || 0,
     contentType: patch.contentType || patch.content_type || 'application/json',
     downloadUrl: patch.downloadUrl,
@@ -634,7 +769,7 @@ function normalizeManifestUpdateInfo(data) {
     ? release.notes.slice(0, 4).map(cleanReleaseLine).filter(Boolean)
     : (extractReleaseNotes(release.body || data.body).length ? extractReleaseNotes(release.body || data.body) : UPDATE_FALLBACK_NOTES);
   const assetInfo = downloadUrl ? {
-    name: asset.name || updateAssetNameFromUrl(downloadUrl) || `Mineradio-${latestVersion}-Setup.exe`,
+    name: asset.name || updateAssetNameFromUrl(downloadUrl) || `TwT-${latestVersion}-Setup.exe`,
     size: Number(asset.size || 0) || 0,
     contentType: asset.contentType || asset.content_type || '',
     downloadUrl,
@@ -650,7 +785,7 @@ function normalizeManifestUpdateInfo(data) {
     latestVersion,
     release: {
       tagName: release.tagName || release.tag_name || data.tagName || ('v' + latestVersion),
-      name: release.name || data.name || ('Mineradio v' + latestVersion),
+      name: release.name || data.name || ('TwT v' + latestVersion),
       version: latestVersion,
       publishedAt: release.publishedAt || release.published_at || data.publishedAt || '',
       htmlUrl: release.htmlUrl || release.html_url || data.htmlUrl || '',
@@ -669,7 +804,7 @@ async function readUpdateManifest(ref) {
   if (!value) throw new Error('UPDATE_MANIFEST_MISSING');
   if (/^https?:\/\//i.test(value)) {
     const resp = await fetch(value, {
-      headers: { 'User-Agent': `Mineradio/${APP_VERSION}` },
+      headers: { 'User-Agent': `TwT/${APP_VERSION}` },
     });
     if (!resp.ok) throw new Error('Update manifest ' + resp.status);
     return resp.json();
@@ -734,20 +869,21 @@ function compactBeatMapCachePayload(body) {
     map,
   };
 }
-function readBeatMapCache(key) {
+async function readBeatMapCache(key) {
   const file = safeBeatMapCacheFile(key);
-  if (!file || !fs.existsSync(file)) return null;
-  const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
+  if (!file) return null;
+  try { if (!await fs.promises.access(file).then(() => true).catch(() => false)) return null; } catch(e) { return null; }
+  const raw = JSON.parse(await fs.promises.readFile(file, 'utf8'));
   return raw && raw.map ? raw : null;
 }
-function writeBeatMapCache(body) {
+async function writeBeatMapCache(body) {
   const payload = compactBeatMapCachePayload(body);
   if (!payload) return { ok: false, error: 'INVALID_BEATMAP_CACHE_PAYLOAD' };
   const file = safeBeatMapCacheFile(payload.key);
   if (!file) return { ok: false, error: 'INVALID_BEATMAP_CACHE_KEY' };
   const tmp = file + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(payload));
-  fs.renameSync(tmp, file);
+  await fs.promises.writeFile(tmp, JSON.stringify(payload));
+  await fs.promises.rename(tmp, file);
   return { ok: true, key: payload.key, savedAt: payload.savedAt, dir: path.dirname(file) };
 }
 function localUpdateFallback(reason, opts) {
@@ -761,7 +897,7 @@ function localUpdateFallback(reason, opts) {
     latestVersion: APP_VERSION,
     release: {
       tagName: 'v' + APP_VERSION,
-      name: 'Mineradio v' + APP_VERSION,
+      name: 'TwT v' + APP_VERSION,
       version: APP_VERSION,
       htmlUrl: '',
       downloadUrl: '',
@@ -822,7 +958,7 @@ async function fetchTextFromCandidates(candidates, timeoutMs) {
     const candidate = list[i];
     try {
       const resp = await fetchWithTimeout(candidate.url, {
-        headers: { 'User-Agent': `Mineradio/${APP_VERSION}` },
+        headers: { 'User-Agent': `TwT/${APP_VERSION}` },
       }, timeoutMs || 6500);
       if (!resp.ok) throw updateError('HTTP_' + resp.status, 'HTTP ' + resp.status);
       return { text: await resp.text(), candidate };
@@ -848,7 +984,7 @@ function githubReleaseDownloadUrl(version, fileName) {
 }
 function parseLatestYmlUpdateInfo(text, reason) {
   const latestVersion = normalizeVersion(yamlScalar(text, 'version') || APP_VERSION) || APP_VERSION;
-  const assetPath = yamlScalar(text, 'path') || yamlScalar(text, 'url') || `Mineradio-${latestVersion}-Setup.exe`;
+  const assetPath = yamlScalar(text, 'path') || yamlScalar(text, 'url') || `TwT-${latestVersion}-Setup.exe`;
   const sha512 = normalizeDigest(yamlScalar(text, 'sha512'), 'sha512');
   const size = Number(yamlScalar(text, 'size') || 0) || 0;
   const releaseDate = yamlScalar(text, 'releaseDate');
@@ -871,7 +1007,7 @@ function parseLatestYmlUpdateInfo(text, reason) {
     latestVersion,
     release: {
       tagName: 'v' + latestVersion,
-      name: 'Mineradio v' + latestVersion,
+      name: 'TwT v' + latestVersion,
       version: latestVersion,
       publishedAt: releaseDate,
       htmlUrl: `https://github.com/${UPDATE_CONFIG.owner}/${UPDATE_CONFIG.repo}/releases/tag/v${latestVersion}`,
@@ -903,7 +1039,7 @@ async function fetchLatestUpdateInfo() {
     const resp = await fetch(apiUrl, {
       signal: controller.signal,
       headers: {
-        'User-Agent': `Mineradio/${APP_VERSION}`,
+        'User-Agent': `TwT/${APP_VERSION}`,
         'Accept': 'application/vnd.github+json',
       },
     });
@@ -924,7 +1060,7 @@ async function fetchLatestUpdateInfo() {
       latestVersion,
       release: {
         tagName: data.tag_name || ('v' + latestVersion),
-        name: data.name || ('Mineradio v' + latestVersion),
+        name: data.name || ('TwT v' + latestVersion),
         version: latestVersion,
         publishedAt: data.published_at || '',
         htmlUrl: data.html_url || '',
@@ -945,13 +1081,13 @@ async function fetchLatestUpdateInfo() {
   }
 }
 function safeUpdateFileName(name, version) {
-  const raw = String(name || '').trim() || `Mineradio-${version || APP_VERSION}.exe`;
+  const raw = String(name || '').trim() || `TwT-${version || APP_VERSION}.exe`;
   const cleaned = raw
     .replace(/[<>:"/\\|?*\x00-\x1F]/g, '-')
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, 160);
-  return cleaned || `Mineradio-${version || APP_VERSION}.exe`;
+  return cleaned || `TwT-${version || APP_VERSION}.exe`;
 }
 function publicUpdateJob(job) {
   if (!job) return { ok: false, error: 'UPDATE_JOB_NOT_FOUND' };
@@ -1000,7 +1136,7 @@ async function downloadUpdateAsset(job) {
 
     const resp = await fetch(job.downloadUrl, {
       headers: {
-        'User-Agent': `Mineradio/${APP_VERSION}`,
+        'User-Agent': `TwT/${APP_VERSION}`,
       },
     });
     if (!resp.ok) throw new Error('Download failed ' + resp.status);
@@ -1186,7 +1322,7 @@ async function downloadUpdateAssetWithMirrors(job) {
       job.message = job.total ? '正在下载完整安装包' : '正在下载完整安装包，等待服务器返回大小';
 
       const resp = await fetchWithTimeout(candidate.url, {
-        headers: { 'User-Agent': `Mineradio/${APP_VERSION}` },
+        headers: { 'User-Agent': `TwT/${APP_VERSION}` },
       }, 14000);
       if (!resp.ok) throw updateError('HTTP_' + resp.status, 'HTTP ' + resp.status);
 
@@ -1384,7 +1520,7 @@ async function downloadAndApplyPatch(job) {
     job.updatedAt = Date.now();
 
     const resp = await fetch(job.downloadUrl, {
-      headers: { 'User-Agent': `Mineradio/${APP_VERSION}` },
+      headers: { 'User-Agent': `TwT/${APP_VERSION}` },
     });
     if (!resp.ok) throw new Error('Patch download failed ' + resp.status);
 
@@ -1436,7 +1572,7 @@ async function downloadPatchBufferFromCandidate(job, candidate, index, total) {
   job.updatedAt = Date.now();
 
   const resp = await fetchWithTimeout(candidate.url, {
-    headers: { 'User-Agent': `Mineradio/${APP_VERSION}` },
+    headers: { 'User-Agent': `TwT/${APP_VERSION}` },
   }, 12000);
   if (!resp.ok) throw updateError('HTTP_' + resp.status, 'HTTP ' + resp.status);
 
@@ -2117,14 +2253,23 @@ const QQ_HEADERS = {
   'User-Agent': UA,
 };
 
+var _keepaliveHttpAgent = null;
+var _keepaliveHttpsAgent = null;
+function _ensureKeepAliveAgents() {
+  if (!_keepaliveHttpAgent) _keepaliveHttpAgent = new http.Agent({ keepAlive: true, keepAliveMsecs: 30000, maxSockets: 25, maxFreeSockets: 10, timeout: 60000 });
+  if (!_keepaliveHttpsAgent) _keepaliveHttpsAgent = new https.Agent({ keepAlive: true, keepAliveMsecs: 30000, maxSockets: 25, maxFreeSockets: 10, timeout: 60000 });
+}
+
 function requestText(targetUrl, opts, body) {
   opts = opts || {};
+  _ensureKeepAliveAgents();
   return new Promise((resolve, reject) => {
     const u = new URL(targetUrl);
     const lib = u.protocol === 'https:' ? https : http;
     const req = lib.request(u, {
       method: opts.method || 'GET',
       headers: opts.headers || {},
+      agent: u.protocol === 'https:' ? _keepaliveHttpsAgent : _keepaliveHttpAgent,
     }, response => {
       const chunks = [];
       response.on('data', chunk => chunks.push(chunk));
@@ -3919,6 +4064,20 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost:' + PORT);
   const pn = url.pathname;
 
+  if (req.method === 'GET' && _API_CACHE_TTL[pn]) {
+    var cached = _getCachedResp(pn, url);
+    if (cached) { sendJSON(res, cached); return; }
+    var _origEnd = res.end.bind(res);
+    res.end = function(chunk) {
+      try {
+        if (res.statusCode === 200 && res._twtCacheData && !res._twtCacheData.error) {
+          _setCachedResp(pn, url, res._twtCacheData);
+        }
+      } catch(e) {}
+      return _origEnd(chunk);
+    };
+  }
+
   if (pn === '/api/wallpaper/scan') {
     try {
       sendJSON(res, scanWallpaperEngineLibrary(url.searchParams.get('root') || ''));
@@ -3945,8 +4104,8 @@ const server = http.createServer(async (req, res) => {
 
   if (pn === '/api/app/version') {
     sendJSON(res, {
-      name: APP_PACKAGE.name || 'mineradio',
-      productName: APP_PACKAGE.productName || 'Mineradio',
+      name: APP_PACKAGE.name || 'twt',
+      productName: APP_PACKAGE.productName || 'TwT',
       version: APP_VERSION,
       update: {
         provider: UPDATE_CONFIG.provider,
@@ -4030,7 +4189,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET') {
       const key = url.searchParams.get('key') || '';
       try {
-        const entry = readBeatMapCache(key);
+        const entry = await readBeatMapCache(key);
         sendJSON(res, entry
           ? { ok: true, hit: true, key: entry.key || key, map: entry.map, meta: entry.meta || {}, savedAt: entry.savedAt || 0 }
           : { ok: true, hit: false, key });
@@ -4052,7 +4211,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST') {
       try {
         const body = await readRequestBody(req);
-        sendJSON(res, writeBeatMapCache(body));
+        sendJSON(res, await writeBeatMapCache(body));
       } catch (err) {
         const info = err.info || beatCacheRootInfo();
         sendJSON(res, {
@@ -5101,7 +5260,10 @@ const server = http.createServer(async (req, res) => {
         res.end('Invalid cover url');
         return;
       }
-      const resp = await fetch(coverUrl, { headers: { 'User-Agent': UA, 'Referer': 'https://music.163.com/' } });
+      const _coverCtrl = new AbortController();
+      const _coverTimer = setTimeout(() => _coverCtrl.abort(), 10000);
+      const resp = await fetch(coverUrl, { headers: { 'User-Agent': UA, 'Referer': 'https://music.163.com/' }, signal: _coverCtrl.signal });
+      clearTimeout(_coverTimer);
       const ct  = resp.headers.get('content-type') || 'image/jpeg';
       const cl  = resp.headers.get('content-length');
       const hdr = {
@@ -5112,32 +5274,40 @@ const server = http.createServer(async (req, res) => {
       };
       if (cl) hdr['Content-Length'] = cl;
       res.writeHead(resp.status, hdr);
+      var coverAborted = false;
+      req.on('close', function(){ coverAborted = true; try { reader.cancel(); } catch (e) {} });
       const reader = resp.body.getReader();
-      while (true) { const c = await reader.read(); if (c.done) break; res.write(c.value); }
-      res.end();
+      while (true) { if (coverAborted) break; const c = await reader.read(); if (c.done) break; res.write(c.value); }
+      if (!coverAborted) res.end();
     } catch (err) { console.error('[Cover]', err); res.writeHead(500); res.end(); }
     return;
   }
 
-  // ---------- 音频代理 (支持 Range) ----------
+  // ---------- 音频代理 (支持 Range, keep-alive) ----------
   if (pn === '/api/audio') {
     try {
       const audioUrl = url.searchParams.get('url');
       if (!audioUrl) { res.writeHead(400); res.end('Missing url'); return; }
       const range = req.headers.range || '';
       const hdr = audioProxyHeadersFor(audioUrl, range);
-      const up = await fetch(audioUrl, { headers: hdr });
-      const out = {
-        'Content-Type': audioContentTypeForUrl(audioUrl, up.headers.get('content-type')),
-        'Access-Control-Allow-Origin': '*',
-        'Accept-Ranges': 'bytes',
-      };
-      const cl = up.headers.get('content-length'); if (cl) out['Content-Length'] = cl;
-      const cr = up.headers.get('content-range');  if (cr) out['Content-Range']  = cr;
-      res.writeHead(up.status, out);
-      const reader = up.body.getReader();
-      while (true) { const c = await reader.read(); if (c.done) break; res.write(c.value); }
-      res.end();
+      _ensureKeepAliveAgents();
+      const au = new URL(audioUrl);
+      const alib = au.protocol === 'https:' ? https : http;
+      const aagent = au.protocol === 'https:' ? _keepaliveHttpsAgent : _keepaliveHttpAgent;
+      const upReq = alib.request(au, { method: 'GET', headers: hdr, agent: aagent }, function(upResp) {
+        const out = {
+          'Content-Type': audioContentTypeForUrl(audioUrl, upResp.headers['content-type']),
+          'Access-Control-Allow-Origin': '*',
+          'Accept-Ranges': 'bytes',
+        };
+        const cl = upResp.headers['content-length']; if (cl) out['Content-Length'] = cl;
+        const cr = upResp.headers['content-range'];  if (cr) out['Content-Range']  = cr;
+        res.writeHead(upResp.statusCode, out);
+        upResp.pipe(res);
+        req.on('close', function(){ try { upReq.destroy(); } catch(e) {} });
+      });
+      upReq.on('error', function(err) { console.error('[Audio]', err); try { res.writeHead(500); res.end(); } catch(e) {} });
+      upReq.end();
     } catch (err) { console.error('[Audio]', err); res.writeHead(500); res.end(); }
     return;
   }
@@ -5158,6 +5328,7 @@ server.listen(PORT, HOST, () => {
   console.log(' 粒子音乐可视化 v2  →  http://localhost:' + PORT);
   console.log(' 登录态: ' + (userCookie ? '已登录(cookie已加载)' : '未登录'));
   console.log('======================================================');
+  setTimeout(_preconnectUpstream, 1000);
 });
 
 module.exports = server;

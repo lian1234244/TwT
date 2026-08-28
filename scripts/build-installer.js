@@ -100,11 +100,11 @@ function assertInstallerConfig(pkg) {
   if (!files.includes('resources/location/**/*')) throw new Error('Offline location data is missing from the installer file list.');
   if (files.includes('build/**/*')) throw new Error('Build-time installer assets must not be copied into the installed app.');
   if (pkg.author !== 'Mikalinsa') throw new Error('Release author must be Mikalinsa.');
-  if (pkg.mineradio?.edition !== 'Mikalinsa Edition' || pkg.mineradio?.creator !== 'Mikalinsa') {
-    throw new Error('Mikalinsa Edition identity is missing from package.json.');
+  if (pkg.mineradio?.edition !== 'TwT Edition' || pkg.mineradio?.creator !== 'Mikalinsa') {
+    throw new Error('TwT Edition identity is missing from package.json.');
   }
-  if (nsis.artifactName !== 'Mineradio-Mikalinsa-${version}-Setup.${ext}') {
-    throw new Error('Installer artifact naming must identify the Mikalinsa edition.');
+  if (nsis.artifactName !== 'TwT-${version}-Setup.${ext}') {
+    throw new Error('Installer artifact naming must identify the TwT edition.');
   }
 }
 
@@ -182,7 +182,7 @@ async function stopMineradioProcesses() {
 
 function clearStaleArtifacts(productName, version) {
   fs.mkdirSync(distDir, { recursive: true });
-  const releaseBase = `${productName}-Mikalinsa-${version}`;
+  const releaseBase = `${productName}-${version}`;
   const names = [
     `${releaseBase}-Setup.exe`,
     `${releaseBase}-Setup.exe.blockmap`,
@@ -236,8 +236,8 @@ function sha256(filePath) {
 }
 
 async function writeReleaseMetadata(pkg) {
-  const productName = pkg.productName || 'Mineradio';
-  const releaseBase = `${productName}-Mikalinsa-${pkg.version}`;
+  const productName = pkg.productName || 'TwT';
+  const releaseBase = `${productName}-${pkg.version}`;
   const installerName = `${releaseBase}-Setup.exe`;
   const installerPath = path.join(distDir, installerName);
   if (!fs.existsSync(installerPath)) throw new Error(`Installer was not generated: ${installerPath}`);
@@ -255,7 +255,7 @@ async function writeReleaseMetadata(pkg) {
   const manifestName = `${releaseBase}-release-manifest.json`;
   fs.writeFileSync(path.join(distDir, checksumName), `${digest}  ${installerName}\r\n`, 'utf8');
   fs.writeFileSync(path.join(distDir, notesName), [
-    `Mineradio ${pkg.version} - Mikalinsa Edition`,
+    `TwT ${pkg.version} - ${pkg.mineradio.edition}`,
     '',
     ...pkg.releaseNotes.map(note => `- ${note}`),
     '',

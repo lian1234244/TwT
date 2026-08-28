@@ -49,6 +49,8 @@
   Var MineradioSmallFont
   Var MineradioDirectoryPage
   Var MineradioDirectoryInput
+  Var TwTShiShiPage
+  Var TwTShiShiFont
 !endif
 
 !macro customInit
@@ -56,6 +58,7 @@
     Call MineradioUsePreferredInstallDir
     Call MineradioDisableUnsafeOldUninstallers
     ${If} ${Silent}
+      Call MineradioStopRunningAppForUpdate
       Call MineradioValidateInstallDir
     ${EndIf}
   !endif
@@ -64,9 +67,12 @@
 !macro customInstall
   FileOpen $0 "$INSTDIR\${MINERADIO_INSTALL_MARKER}" w
   ${IfNot} ${Errors}
-    FileWrite $0 "Mineradio install root$\r$\n"
-    FileWrite $0 "appId=com.mineradio.desktop$\r$\n"
+    FileWrite $0 "TwT install root$\r$\n"
+    FileWrite $0 "appId=com.twt.desktop$\r$\n"
     FileClose $0
+  ${EndIf}
+  ${If} ${Silent}
+    Call MineradioRestartAfterSilentUpdate
   ${EndIf}
 !macroend
 
@@ -77,6 +83,7 @@
 
 !macro customWelcomePage
   Page custom MineradioWelcomeShow
+  Page custom TwTShiShiPageShow
 !macroend
 
 !macro customInstallMode
@@ -265,77 +272,77 @@ Function MineradioUseFirstAvailableInstallDir
   IfFileExists "X:\*.*" driveX 0
   IfFileExists "Y:\*.*" driveY 0
   IfFileExists "Z:\*.*" driveZ 0
-  StrCpy $INSTDIR "C:\Mineradio"
+  StrCpy $INSTDIR "C:\TwT"
   Return
 
   driveD:
-    StrCpy $INSTDIR "D:\Mineradio"
+    StrCpy $INSTDIR "D:\TwT"
     Return
   driveE:
-    StrCpy $INSTDIR "E:\Mineradio"
+    StrCpy $INSTDIR "E:\TwT"
     Return
   driveF:
-    StrCpy $INSTDIR "F:\Mineradio"
+    StrCpy $INSTDIR "F:\TwT"
     Return
   driveG:
-    StrCpy $INSTDIR "G:\Mineradio"
+    StrCpy $INSTDIR "G:\TwT"
     Return
   driveH:
-    StrCpy $INSTDIR "H:\Mineradio"
+    StrCpy $INSTDIR "H:\TwT"
     Return
   driveI:
-    StrCpy $INSTDIR "I:\Mineradio"
+    StrCpy $INSTDIR "I:\TwT"
     Return
   driveJ:
-    StrCpy $INSTDIR "J:\Mineradio"
+    StrCpy $INSTDIR "J:\TwT"
     Return
   driveK:
-    StrCpy $INSTDIR "K:\Mineradio"
+    StrCpy $INSTDIR "K:\TwT"
     Return
   driveL:
-    StrCpy $INSTDIR "L:\Mineradio"
+    StrCpy $INSTDIR "L:\TwT"
     Return
   driveM:
-    StrCpy $INSTDIR "M:\Mineradio"
+    StrCpy $INSTDIR "M:\TwT"
     Return
   driveN:
-    StrCpy $INSTDIR "N:\Mineradio"
+    StrCpy $INSTDIR "N:\TwT"
     Return
   driveO:
-    StrCpy $INSTDIR "O:\Mineradio"
+    StrCpy $INSTDIR "O:\TwT"
     Return
   driveP:
-    StrCpy $INSTDIR "P:\Mineradio"
+    StrCpy $INSTDIR "P:\TwT"
     Return
   driveQ:
-    StrCpy $INSTDIR "Q:\Mineradio"
+    StrCpy $INSTDIR "Q:\TwT"
     Return
   driveR:
-    StrCpy $INSTDIR "R:\Mineradio"
+    StrCpy $INSTDIR "R:\TwT"
     Return
   driveS:
-    StrCpy $INSTDIR "S:\Mineradio"
+    StrCpy $INSTDIR "S:\TwT"
     Return
   driveT:
-    StrCpy $INSTDIR "T:\Mineradio"
+    StrCpy $INSTDIR "T:\TwT"
     Return
   driveU:
-    StrCpy $INSTDIR "U:\Mineradio"
+    StrCpy $INSTDIR "U:\TwT"
     Return
   driveV:
-    StrCpy $INSTDIR "V:\Mineradio"
+    StrCpy $INSTDIR "V:\TwT"
     Return
   driveW:
-    StrCpy $INSTDIR "W:\Mineradio"
+    StrCpy $INSTDIR "W:\TwT"
     Return
   driveX:
-    StrCpy $INSTDIR "X:\Mineradio"
+    StrCpy $INSTDIR "X:\TwT"
     Return
   driveY:
-    StrCpy $INSTDIR "Y:\Mineradio"
+    StrCpy $INSTDIR "Y:\TwT"
     Return
   driveZ:
-    StrCpy $INSTDIR "Z:\Mineradio"
+    StrCpy $INSTDIR "Z:\TwT"
     Return
 FunctionEnd
 
@@ -348,23 +355,23 @@ Function MineradioNormalizeInstallDir
   ${If} $1 == 2
     StrCpy $2 "$0" 1 1
     ${If} $2 == ":"
-      StrCpy $0 "$0\Mineradio"
+      StrCpy $0 "$0\TwT"
     ${EndIf}
   ${ElseIf} $1 == 3
     StrCpy $2 "$0" 1 1
     StrCpy $3 "$0" 1 2
     ${If} $2 == ":"
     ${AndIf} $3 == "\"
-      StrCpy $0 "$0Mineradio"
+      StrCpy $0 "$0TwT"
     ${EndIf}
   ${EndIf}
 
   StrLen $1 "$0"
-  StrCpy $2 "$0" 10 -10
-  ${If} $1 < 10
-  ${OrIf} $2 != "\Mineradio"
-  ${AndIf} $2 != "\mineradio"
-    StrCpy $0 "$0\Mineradio"
+  StrCpy $2 "$0" 4 -4
+  ${If} $1 < 4
+  ${OrIf} $2 != "\TwT"
+  ${AndIf} $2 != "\twt"
+    StrCpy $0 "$0\TwT"
   ${EndIf}
   Exch $0
 FunctionEnd
@@ -626,7 +633,7 @@ Function MineradioDisableUnsafeOldUninstallers
   Call MineradioOldInstallPathNeedsQuarantine
   Pop $1
   ${If} $1 == "1"
-    DetailPrint "Skip unsafe legacy Mineradio uninstaller: $0"
+    DetailPrint "Skip unsafe legacy TwT uninstaller: $0"
     StrCpy $2 "1"
   ${EndIf}
 
@@ -637,7 +644,7 @@ Function MineradioDisableUnsafeOldUninstallers
   Call MineradioOldInstallPathNeedsQuarantine
   Pop $1
   ${If} $1 == "1"
-    DetailPrint "Skip unsafe legacy Mineradio uninstaller: $0"
+    DetailPrint "Skip unsafe legacy TwT uninstaller: $0"
     StrCpy $2 "1"
   ${EndIf}
 
@@ -655,7 +662,7 @@ Function MineradioDisableUnsafeOldUninstallers
   Call MineradioOldInstallPathNeedsQuarantine
   Pop $1
   ${If} $1 == "1"
-    DetailPrint "Skip unsafe legacy Mineradio uninstaller: $0"
+    DetailPrint "Skip unsafe legacy TwT uninstaller: $0"
     StrCpy $2 "1"
   ${EndIf}
 
@@ -666,7 +673,7 @@ Function MineradioDisableUnsafeOldUninstallers
   Call MineradioOldInstallPathNeedsQuarantine
   Pop $1
   ${If} $1 == "1"
-    DetailPrint "Skip unsafe legacy Mineradio uninstaller: $0"
+    DetailPrint "Skip unsafe legacy TwT uninstaller: $0"
     StrCpy $2 "1"
   ${EndIf}
 
@@ -684,7 +691,7 @@ Function MineradioDeleteLegacyUninstallerFileIfMissingMarker
     Pop $1
     ${If} $1 != ""
       IfFileExists "$1\${MINERADIO_INSTALL_MARKER}" done 0
-      DetailPrint "Remove legacy Mineradio uninstaller file: $1"
+      DetailPrint "Remove legacy TwT uninstaller file: $1"
       Delete "$1\Uninstall ${PRODUCT_FILENAME}.exe"
     ${EndIf}
   ${EndIf}
@@ -706,11 +713,11 @@ Function MineradioValidateInstallDir
   Pop $4
 
   StrLen $0 "$INSTDIR"
-  StrCpy $1 "$INSTDIR" 10 -10
-  ${If} $0 < 10
-  ${OrIf} $1 != "\Mineradio"
-  ${AndIf} $1 != "\mineradio"
-    MessageBox MB_ICONSTOP|MB_OK "安装目录必须是独立的 Mineradio 文件夹。请选择一个上级目录，安装器会自动创建 Mineradio 子文件夹。"
+  StrCpy $1 "$INSTDIR" 4 -4
+  ${If} $0 < 4
+  ${OrIf} $1 != "\TwT"
+  ${AndIf} $1 != "\twt"
+    MessageBox MB_ICONSTOP|MB_OK "安装目录必须是独立的 TwT 文件夹。请选择一个上级目录，安装器会自动创建 TwT 子文件夹。"
     Abort
   ${EndIf}
 
@@ -738,11 +745,48 @@ Function MineradioValidateInstallDir
     Goto valid
   ${EndIf}
 
-  MessageBox MB_ICONSTOP|MB_OK "为避免卸载时误删其它文件，Mineradio 不能安装到已有文件的非专属目录。请新建或选择一个空的 Mineradio 文件夹。$\r$\n$\r$\n当前路径：$INSTDIR"
+  MessageBox MB_ICONSTOP|MB_OK "为避免卸载时误删其它文件，TwT 不能安装到已有文件的非专属目录。请新建或选择一个空的 TwT 文件夹。$\r$\n$\r$\n当前路径：$INSTDIR"
   Abort
 
   valid:
 FunctionEnd
+
+; 静默更新时等待正在运行的 TwT 退出（客户端会自行退出，这里是双保险）
+Function MineradioStopRunningAppForUpdate
+  DetailPrint "正在等待 TwT 退出..."
+  nsExec::Exec 'taskkill /IM "${PRODUCT_FILENAME}.exe"'
+  Sleep 1500
+  nsExec::Exec 'taskkill /F /IM "${PRODUCT_FILENAME}.exe"'
+  Sleep 600
+FunctionEnd
+
+; 静默更新完成后自动重启应用，用户全程无感
+Function MineradioRestartAfterSilentUpdate
+  Sleep 800
+  ${If} ${FileExists} "$INSTDIR\${PRODUCT_FILENAME}.exe"
+    ${StdUtils.ExecShellAsUser} $0 "$INSTDIR\${PRODUCT_FILENAME}.exe" "open" "--updated"
+  ${EndIf}
+FunctionEnd
+
+
+Function TwTShiShiPageShow
+  nsDialogs::Create 1018
+  Pop $TwTShiShiPage
+  ${If} $TwTShiShiPage == error
+    Abort
+  ${EndIf}
+
+  SetCtlColors $TwTShiShiPage "111217" "FFFFFF"
+  CreateFont $TwTShiShiFont "Microsoft YaHei UI" 28 700
+
+  ${NSD_CreateLabel} 20u 55u 260u 40u "诗诗是只大笨猪!"
+  Pop $0
+  SendMessage $0 ${WM_SETFONT} $TwTShiShiFont 1
+  SetCtlColors $0 "3257F7" "FFFFFF"
+
+  nsDialogs::Show
+FunctionEnd
+
 Function MineradioWelcomeShow
   Call MineradioUsePreferredInstallDir
 
@@ -758,12 +802,12 @@ Function MineradioWelcomeShow
   CreateFont $MineradioBodyFont "Microsoft YaHei UI" 9 400
   CreateFont $MineradioSmallFont "Microsoft YaHei UI" 8 400
 
-  ${NSD_CreateLabel} 22u 20u 220u 10u "MINERADIO  /  MIKALINSA EDITION  /  v${VERSION}"
+  ${NSD_CreateLabel} 22u 20u 220u 10u "TWT  /  v${VERSION}"
   Pop $0
   SendMessage $0 ${WM_SETFONT} $MineradioSmallFont 1
   SetCtlColors $0 "3257F7" "FFFFFF"
 
-  ${NSD_CreateLabel} 22u 42u 226u 30u "Mineradio 安装"
+  ${NSD_CreateLabel} 22u 42u 226u 30u "TwT 安装"
   Pop $0
   SendMessage $0 ${WM_SETFONT} $MineradioHeroFont 1
   SetCtlColors $0 "111217" "FFFFFF"
@@ -776,7 +820,7 @@ Function MineradioWelcomeShow
 FunctionEnd
 
 Function MineradioDirectoryBrowse
-  nsDialogs::SelectFolderDialog "选择 Mineradio 安装文件夹" "$INSTDIR"
+  nsDialogs::SelectFolderDialog "选择 TwT 安装文件夹" "$INSTDIR"
   Pop $0
   ${If} $0 != error
   ${AndIf} $0 != ""
@@ -805,7 +849,7 @@ Function MineradioReleaseNotesShow
   SendMessage $0 ${WM_SETFONT} $MineradioTitleFont 1
   SetCtlColors $0 "111217" "FFFFFF"
 
-  ${NSD_CreateLabel} 22u 38u 238u 12u "Mineradio ${VERSION}  /  Mikalinsa Edition"
+  ${NSD_CreateLabel} 22u 38u 238u 12u "TwT ${VERSION}"
   Pop $0
   SendMessage $0 ${WM_SETFONT} $MineradioSmallFont 1
   SetCtlColors $0 "3257F7" "FFFFFF"
@@ -857,7 +901,7 @@ Function MineradioDirectoryShow
   SendMessage $0 ${WM_SETFONT} $MineradioSmallFont 1
   ${NSD_OnClick} $0 MineradioDirectoryBrowse
 
-  ${NSD_CreateLabel} 22u 122u 238u 12u "默认推荐：D:\Mineradio；选盘符会自动建文件夹。"
+  ${NSD_CreateLabel} 22u 122u 238u 12u "默认推荐：D:\TwT；选盘符会自动建文件夹。"
   Pop $0
   SendMessage $0 ${WM_SETFONT} $MineradioSmallFont 1
   SetCtlColors $0 "6B7280" "FFFFFF"
@@ -901,23 +945,23 @@ Function un.MineradioNormalizeInstallDir
   ${If} $1 == 2
     StrCpy $2 "$0" 1 1
     ${If} $2 == ":"
-      StrCpy $0 "$0\Mineradio"
+      StrCpy $0 "$0\TwT"
     ${EndIf}
   ${ElseIf} $1 == 3
     StrCpy $2 "$0" 1 1
     StrCpy $3 "$0" 1 2
     ${If} $2 == ":"
     ${AndIf} $3 == "\"
-      StrCpy $0 "$0Mineradio"
+      StrCpy $0 "$0TwT"
     ${EndIf}
   ${EndIf}
 
   StrLen $1 "$0"
-  StrCpy $2 "$0" 10 -10
-  ${If} $1 < 10
-  ${OrIf} $2 != "\Mineradio"
-  ${AndIf} $2 != "\mineradio"
-    StrCpy $0 "$0\Mineradio"
+  StrCpy $2 "$0" 4 -4
+  ${If} $1 < 4
+  ${OrIf} $2 != "\TwT"
+  ${AndIf} $2 != "\twt"
+    StrCpy $0 "$0\TwT"
   ${EndIf}
   Exch $0
 FunctionEnd
@@ -946,7 +990,7 @@ Function un.MineradioValidateUninstallDir
   Call un.MineradioNormalizeInstallDir
   Pop $1
   ${If} $0 != $1
-    MessageBox MB_OK|MB_ICONSTOP "当前卸载路径不是 Mineradio 专属目录，已阻止卸载以避免误删其它文件。$\r$\n$\r$\n当前路径：$INSTDIR$\r$\n安全路径应为：$0"
+    MessageBox MB_OK|MB_ICONSTOP "当前卸载路径不是 TwT 专属目录，已阻止卸载以避免误删其它文件。$\r$\n$\r$\n当前路径：$INSTDIR$\r$\n安全路径应为：$0"
     SetErrorLevel 2
     Quit
   ${EndIf}
@@ -956,7 +1000,7 @@ Function un.MineradioValidateUninstallDir
   Call un.MineradioInstallDirLooksOwned
   Pop $0
   ${If} $0 != "1"
-    MessageBox MB_OK|MB_ICONSTOP "无法确认当前目录属于 Mineradio，已阻止卸载以避免误删其它文件。$\r$\n$\r$\n当前路径：$INSTDIR"
+    MessageBox MB_OK|MB_ICONSTOP "无法确认当前目录属于 TwT，已阻止卸载以避免误删其它文件。$\r$\n$\r$\n当前路径：$INSTDIR"
     SetErrorLevel 2
     Quit
   ${EndIf}

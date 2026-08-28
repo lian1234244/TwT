@@ -1,0 +1,15 @@
+{
+  "name": "twt-signaling-server",
+  "version": "1.0.0",
+  "description": "TwT 信令服务器 - 好友系统 & 一起听",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
